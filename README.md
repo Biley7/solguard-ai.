@@ -2,7 +2,7 @@
 
 The Natural-Language Copilot & On-Chain AI Security Firewall for Solana.
 
-This repository currently contains only the development foundation. Product features, Gemini integration, Phantom integration, and Solana transaction functionality have not been implemented.
+The frontend foundation provides a responsive, modular command-center UI. It is currently a presentation-only preview: Gemini, Phantom, and Solana RPC/transaction functionality are not implemented. On-chain fields show unavailable states rather than fabricated values.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ npm install
 cp .env.example .env
 ```
 
-Replace the Gemini API key placeholder in your local `.env` only when needed. Never commit `.env` or expose credentials to browser code.
+No credentials are required for the current UI preview. Never place secrets in frontend configuration or commit `.env`.
 
 ## Commands
 
@@ -33,14 +33,14 @@ The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint i
 
 ## Project layout
 
-- `frontend/` — Vite-hosted vanilla JavaScript presentation layer. Browser-only Phantom provider access belongs here.
+- `frontend/` — Vite-hosted vanilla JavaScript presentation layer, with modular Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Actions clearly report that integrations are not available; the frontend does not call AI or blockchain services.
 - `backend/src/` — Express API, with separate route, controller, service, middleware, validator, and security directories.
 - `blockchain/src/` — Solana RPC, inspection, transaction, memo, and cluster configuration boundaries.
 - `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
 - `tests/` — Unit, validation, backend, blockchain, and fixture areas.
 - `docs/` — Architecture, API, data model, and security design.
 
-The directories are architectural placeholders, not implemented product features. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. No mock AI or blockchain data is provided.
+Backend and blockchain directories remain architectural placeholders. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. The UI does not display mock AI results, invented balances, fabricated risk scores, or sample transactions.
 
 ## Architecture documents
 

@@ -3,14 +3,85 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SolGuard AI development environment" />
-    <title>SolGuard AI</title>
+    <meta
+      name="description"
+      content="SolGuard AI command center for reviewing Solana Devnet activity and transfer intent."
+    />
+    <meta name="theme-color" content="#101715" />
+    <title>Command Center | SolGuard AI</title>
   </head>
   <body>
-    <main>
-      <h1>SolGuard AI</h1>
-      <p>Development environment ready.</p>
-    </main>
+    <div class="app-shell">
+      <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
+        <a class="brand" href="#command-center" data-view="dashboard" aria-label="SolGuard AI command center">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M16 3.5 26 7v7.2c0 6.1-4.1 11.6-10 14.3C10.1 25.8 6 20.3 6 14.2V7l10-3.5Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="m11.5 15.9 3 3 6.2-6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>SolGuard</strong>
+            <span>AI SECURITY</span>
+          </span>
+        </a>
+
+        <div class="sidebar-label">WORKSPACE</div>
+        <nav class="primary-nav" aria-label="Workspace">
+          <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page">
+            <span class="nav-icon" data-icon="grid"></span><span>Command Center</span>
+          </button>
+          <button class="nav-item" type="button" data-view="copilot">
+            <span class="nav-icon" data-icon="spark"></span><span>AI Copilot</span>
+          </button>
+          <button class="nav-item" type="button" data-view="scanner">
+            <span class="nav-icon" data-icon="scan"></span><span>Wallet Scanner</span>
+          </button>
+          <button class="nav-item" type="button" data-view="xray">
+            <span class="nav-icon" data-icon="search"></span><span>Wallet X-Ray</span>
+          </button>
+          <button class="nav-item" type="button" data-view="history">
+            <span class="nav-icon" data-icon="history"></span><span>Transaction History</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+        <button class="nav-item settings-link" type="button" data-view="settings">
+          <span class="nav-icon" data-icon="settings"></span><span>Settings</span>
+        </button>
+        <div class="sidebar-network">
+          <span class="status-dot status-dot--amber"></span>
+          <span><strong>Devnet</strong><small>RPC not connected</small></span>
+          <span class="network-lock" data-icon="lock"></span>
+        </div>
+        <div class="sidebar-foot">SolGuard AI <span>•</span> MVP Preview</div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" type="button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false">
+            <span data-icon="menu"></span>
+          </button>
+          <div class="topbar-context">
+            <span class="context-label">SOLANA SECURITY</span>
+            <span class="context-divider">/</span>
+            <span class="context-page" id="current-page-label">Command Center</span>
+          </div>
+          <div class="topbar-actions">
+            <span class="environment-chip"><span class="status-dot status-dot--amber"></span>DEVNET</span>
+            <span class="topbar-divider"></span>
+            <button type="button" class="wallet-connect" data-action="connect-wallet">
+              <span class="wallet-indicator"></span>
+              <span>Connect Phantom</span>
+              <span data-icon="chevron-down"></span>
+            </button>
+          </div>
+        </header>
+
+        <main class="main-content" id="app-content" tabindex="-1"></main>
+      </div>
+    </div>
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

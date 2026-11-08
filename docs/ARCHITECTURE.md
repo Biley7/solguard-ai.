@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the intended architecture and module boundaries for the MVP. The current foundation includes the Vite shell, Express health endpoint and request/error handling, an unmounted AI rate limiter, Ajv schema validation, shared intent validation, JSON Schema contracts, and test coverage for these boundaries. It does not implement AI interpretation, risk analysis, wallet access, blockchain reads, transactions, or UI product flows.
+This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive, modular presentation-only frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; JSON Schema contracts; and tests for these boundaries. It does not implement AI interpretation, risk analysis, wallet access, blockchain reads, or transactions. UI values that require these integrations are explicitly unavailable.
 
 The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data.
 
@@ -38,7 +38,7 @@ Gemini has no interface to Phantom, signing, transaction construction, simulatio
 
 ### A. Frontend presentation — `frontend/`
 
-Vanilla JavaScript ES modules, served and built by Vite. Its eventual presentation areas are Dashboard, AI Copilot, Security Scanner, Wallet X-Ray, Transaction Preview, and Transaction History. These names describe approved product requirements; placeholder directories are not implemented screens.
+Vanilla JavaScript ES modules, served and built by Vite. The current UI includes Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Transaction preview is integrated into the Command Center. These are presentation surfaces only; they do not call AI, wallet, or blockchain integrations.
 
 Frontend responsibilities:
 

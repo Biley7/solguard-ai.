@@ -14,7 +14,7 @@
     "build": "vite build",
     "start": "node --env-file-if-exists=.env backend/src/server.js",
     "test": "node --test",
-    "validate": "node --check backend/src/app.js && node --check backend/src/server.js && node --check backend/src/middleware/ai-rate-limit.js && node --check backend/src/validators/intent.js && node --check backend/src/validators/schema-validator.js && node --check frontend/src/main.js && node --check vite.config.js && npm test"
+    "validate": "node --check backend/src/app.js && node --check backend/src/server.js && node --check backend/src/middleware/ai-rate-limit.js && node --check backend/src/validators/intent.js && node --check backend/src/validators/schema-validator.js && node --check frontend/src/main.js && node --check frontend/src/app.js && node --check vite.config.js && npm test"
   },
   "dependencies": {
     "@solana/web3.js": "^3.2.0",
