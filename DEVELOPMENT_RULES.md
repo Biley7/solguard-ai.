@@ -26,7 +26,8 @@ These rules govern every implementation phase. If a requested change appears to 
 - Use Solana RPC and actual wallet/network responses for on-chain claims. Never invent, infer as fact, or present placeholder data as real.
 - Identify data provenance and limitations, including unavailable or potentially incomplete transaction history.
 - Explain the evidence behind heuristic risk indicators. Never characterize a score as a guarantee or substitute for user judgment.
-- Keep multi-recipient payments in one transaction when atomic behavior is requested and supported. If transaction limits prevent this, explain the failure; never silently split the payment.
+- Do not classify a wallet as malicious based only on wallet age, balance, or transaction count.
+- Keep multi-recipient payments of 2–5 recipients in one transaction when atomic behavior is requested and supported. Reject larger batches and explain transaction-limit failures; never silently split the payment.
 - Treat on-chain memo contents as public and permanent. Include only the reviewed, necessary audit information; never include secrets or unnecessary personal data.
 - Report the actual wallet and network outcome, distinguishing wallet rejection, submission, confirmation, and failure. Do not show success without evidence.
 - Link to Solana Explorer with the correct Devnet network context.

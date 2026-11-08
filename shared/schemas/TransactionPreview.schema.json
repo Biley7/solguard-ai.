@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:TransactionPreview",
+  "title": "TransactionPreview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["previewId", "network", "payerAddress", "recipients", "totalLamports", "feeLamports", "simulationStatus", "createdAt"],
+  "properties": {
+    "previewId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "network": {
+      "const": "devnet"
+    },
+    "payerAddress": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 44,
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+    },
+    "recipients": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "$ref": "urn:solguard:schema:Recipient"
+      }
+    },
+    "totalLamports": {
+      "type": "string",
+      "maxLength": 20,
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "feeLamports": {
+      "type": ["string", "null"],
+      "maxLength": 20,
+      "pattern": "^[0-9]+$"
+    },
+    "simulationStatus": {
+      "enum": ["not_run", "passed", "failed", "unavailable"]
+    },
+    "memoText": {
+      "type": ["string", "null"]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

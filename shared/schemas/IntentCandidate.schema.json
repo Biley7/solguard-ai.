@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:IntentCandidate",
+  "title": "IntentCandidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recipients"],
+  "properties": {
+    "recipients": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["address", "amountSol"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44,
+            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+          },
+          "amountSol": {
+            "type": "string",
+            "maxLength": 21,
+            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,9})?$",
+            "description": "Untrusted decimal SOL text; semantic validation converts exactly to positive u64 lamports."
+          }
+        }
+      }
+    }
+  }
+}

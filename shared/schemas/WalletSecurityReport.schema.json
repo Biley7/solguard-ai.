@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:WalletSecurityReport",
+  "title": "WalletSecurityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["address", "network", "source", "accountStatus", "dataAvailability", "observedAt", "riskAssessment"],
+  "properties": {
+    "address": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 44,
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+    },
+    "network": {
+      "const": "devnet"
+    },
+    "source": {
+      "const": "solana-rpc"
+    },
+    "accountStatus": {
+      "enum": ["found", "not_found", "unavailable"]
+    },
+    "dataAvailability": {
+      "enum": ["available", "partial", "unavailable"]
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "riskAssessment": {
+      "$ref": "urn:solguard:schema:RiskAssessment"
+    }
+  }
+}

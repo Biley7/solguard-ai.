@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:TransactionResult",
+  "title": "TransactionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "signature", "confirmationStatus", "explorerUrl", "errorCode"],
+  "properties": {
+    "status": {
+      "enum": ["submitted", "confirmed", "failed", "rejected"]
+    },
+    "signature": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "confirmationStatus": {
+      "enum": ["processed", "confirmed", "finalized", "failed", null]
+    },
+    "explorerUrl": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "errorCode": {
+      "type": ["string", "null"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "submitted" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "signature": { "type": "string", "minLength": 1 },
+          "confirmationStatus": { "enum": ["processed", null] },
+          "explorerUrl": { "type": "string", "format": "uri" },
+          "errorCode": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "confirmed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "signature": { "type": "string", "minLength": 1 },
+          "confirmationStatus": { "enum": ["confirmed", "finalized"] },
+          "explorerUrl": { "type": "string", "format": "uri" },
+          "errorCode": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "failed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "confirmationStatus": { "enum": ["failed", null] },
+          "errorCode": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "rejected" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "signature": { "type": "null" },
+          "confirmationStatus": { "type": "null" },
+          "explorerUrl": { "type": "null" },
+          "errorCode": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  ]
+}

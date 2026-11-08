@@ -26,16 +26,25 @@ npm run dev:frontend   # Start only the frontend
 npm run dev:backend    # Start only the API with automatic reload
 npm run build          # Build the frontend with Vite
 npm start              # Start the Express API
-npm run validate       # Run basic JavaScript syntax validation
+npm run validate       # Run JavaScript syntax checks and schema smoke tests
 ```
 
-The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` in `.env` to change the backend port.
+The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; a server-host deployment must set `HOST=0.0.0.0` (serverless deployments require a platform-specific adapter instead). Set `TRUST_PROXY_HOPS` to the exact trusted reverse-proxy hop count for deployment; do not enable blanket proxy trust.
 
-## Foundation layout
+## Project layout
 
-- `frontend/` — Vite-hosted vanilla JavaScript frontend.
-- `backend/server.js` — Minimal Express API and process health endpoint.
-- `backend/services/gemini/` — Reserved for a future, separate Gemini service.
-- `backend/services/solana/` — Reserved for a future, separate Solana integration layer.
+- `frontend/` — Vite-hosted vanilla JavaScript presentation layer. Browser-only Phantom provider access belongs here.
+- `backend/src/` — Express API, with separate route, controller, service, middleware, validator, and security directories.
+- `blockchain/src/` — Solana RPC, inspection, transaction, memo, and cluster configuration boundaries.
+- `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
+- `tests/` — Unit, validation, backend, blockchain, and fixture areas.
+- `docs/` — Architecture, API, data model, and security design.
 
-The API health endpoint reports only that the local API process is responding. It does not report blockchain or AI service status.
+The directories are architectural placeholders, not implemented product features. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. No mock AI or blockchain data is provided.
+
+## Architecture documents
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [API contracts](docs/API_CONTRACTS.md)
+- [Data models](docs/DATA_MODELS.md)
+- [Security design](docs/SECURITY_DESIGN.md)

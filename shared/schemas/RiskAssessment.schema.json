@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:RiskAssessment",
+  "title": "RiskAssessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "score", "category", "indicators", "assessedAt", "disclaimer"],
+  "properties": {
+    "status": {
+      "enum": ["assessed", "unavailable"]
+    },
+    "score": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "category": {
+      "enum": ["low", "moderate", "high", "unavailable"]
+    },
+    "indicators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "summary", "evidence"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["info", "low", "medium", "high"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "assessedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "disclaimer": {
+      "const": "Heuristic information only; this assessment does not guarantee wallet safety."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "unavailable" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "score": { "type": "null" },
+          "category": { "const": "unavailable" },
+          "indicators": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "assessed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "score": { "type": "integer" },
+          "category": { "enum": ["low", "moderate", "high"] }
+        }
+      }
+    }
+  ]
+}

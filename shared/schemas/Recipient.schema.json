@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:Recipient",
+  "title": "Recipient",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["address", "amountLamports"],
+  "properties": {
+    "address": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 44,
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+    },
+    "amountLamports": {
+      "type": "string",
+      "maxLength": 20,
+      "pattern": "^[1-9][0-9]*$",
+      "description": "Positive canonical base-10 integer string; range must be checked semantically against u64."
+    }
+  }
+}

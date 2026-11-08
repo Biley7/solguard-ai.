@@ -32,7 +32,7 @@ Provide a Devnet web application that:
 - Regular Solana users who want an additional review step before sending SOL.
 - Beginners who need transaction details explained in understandable language.
 - Users who want to inspect recipient addresses before authorizing a transfer.
-- Users who need to make payments to multiple recipients in one transaction when the transaction can fit within Solana's applicable limits.
+- Users who need to make atomic payments to 2–5 recipients in one transaction when the transaction fits Solana's applicable limits.
 
 ## 5. Core features
 
@@ -40,7 +40,7 @@ Provide a Devnet web application that:
 2. **Gemini intent extraction:** Use Gemini 2.5 Flash as the proposed initial model, subject to confirming current API availability. The model proposes structured intent only.
 3. **Recipient wallet inspection:** Retrieve relevant account information for recipient public addresses from Solana RPC.
 4. **Explainable heuristic risk assessment:** Present evidence-based indicators and their limitations; do not claim a score proves safety or maliciousness.
-5. **Atomic multi-recipient transfers:** Where supported by transaction limits, prepare multiple SOL transfers in one transaction so they succeed or fail together.
+5. **Atomic multi-recipient transfers:** Support batches of 2–5 SOL recipients in one transaction so they succeed or fail together, subject to Solana transaction limits. Single-recipient transfers remain supported separately.
 6. **On-chain audit memo:** Include an appropriate Memo Program record in the transaction when the user has chosen to submit the transaction. Do not put secrets or unnecessary personal information in public memo data.
 7. **Wallet X-Ray:** Inspect an arbitrary Solana public address using available on-chain data, with clear source and data-availability boundaries.
 8. **Transaction history and Explorer verification:** Show transactions available to the application or connected wallet and provide Solana Explorer links for verification. Distinguish RPC-confirmed data from unavailable or incomplete history.
@@ -69,7 +69,7 @@ At any review step, the user may stop without signing or submitting a transactio
 - **FR-06 — Recipient inspection:** Query Solana RPC for each recipient and show only data actually returned. Identify unavailable, stale, or incomplete data rather than fabricating a result.
 - **FR-07 — Risk explanation:** Show the heuristic indicators used, the evidence behind each displayed indicator, and a clear statement that the assessment is not a guarantee of wallet safety.
 - **FR-08 — Single-recipient transfer:** Prepare a SOL transfer only from validated user intent and make it available for explicit user review and Phantom authorization.
-- **FR-09 — Multi-recipient transfer:** Prepare supported SOL transfers to multiple recipients in one atomic transaction. If the transaction cannot be represented or submitted within applicable limits, explain the constraint and do not silently split it into multiple transactions.
+- **FR-09 — Multi-recipient transfer:** Support batches of 2–5 recipients in one atomic transaction. Reject larger batches; if a supported batch cannot fit applicable transaction limits, explain the constraint and do not silently split it.
 - **FR-10 — Memo record:** When the supported audit memo is enabled for a transfer, include it in the same transaction and show its exact contents before authorization.
 - **FR-11 — User authorization:** Request signing/submission only through Phantom after explicit user action. Handle rejection and wallet errors as non-success outcomes.
 - **FR-12 — Transaction result:** Display the returned signature and actual confirmation/status information. Do not display success unless supported by the RPC/wallet result.
@@ -102,6 +102,7 @@ At any review step, the user may stop without signing or submitting a transactio
 - Make transaction contents and network visible before requesting Phantom authorization.
 - Use Solana RPC data as the source for on-chain claims. Clearly communicate RPC errors, missing data, and limitations.
 - Treat risk scoring as heuristic and informational; do not claim that a low-risk result means an address is safe.
+- Do not classify a wallet as malicious based only on wallet age, balance, or transaction count.
 - Do not put secrets or unnecessary personal or sensitive information into an on-chain memo, which is publicly visible and effectively permanent.
 - Protect backend endpoints with input validation, appropriate request limits, and safe error handling. Do not expose internal errors or secrets to clients.
 - Use HTTPS in deployed environments and store service credentials only in the hosting platform's secret configuration.
@@ -127,7 +128,7 @@ This is the proposed MVP stack, not a commitment to add infrastructure beyond wh
 - Risk assessment is heuristic, limited by available RPC data, and cannot guarantee that an address is safe or unsafe.
 - AI extraction can be incorrect; users must verify every transaction detail and the application must reject invalid or ambiguous proposals.
 - RPC availability, indexing, rate limits, and retention may limit account and transaction history. The application must not imply complete history unless its data source supports that claim.
-- Atomic multi-recipient transfers are constrained by Solana transaction size, compute, account, and fee requirements. The MVP must not silently convert one requested atomic transaction into several.
+- Atomic multi-recipient transfers are limited to 2–5 recipients and remain constrained by Solana transaction size, compute, account, and fee requirements. The MVP must not silently convert one requested atomic transaction into several.
 - A transaction may fail, be rejected, or remain unconfirmed; the UI must reflect the actual reported status.
 - On-chain memo content is public. The audit memo must not be used to store confidential information.
 - Gemini model/API availability and terms may change and must be confirmed before implementation.
@@ -142,7 +143,7 @@ The MVP is successful when a user can, on Solana Devnet:
 3. See the exact recipient addresses, amounts, total, network, available RPC-derived recipient information, and explainable heuristic risk signals before any signing request.
 4. Inspect an arbitrary public Solana address through Wallet X-Ray, with unavailable data clearly identified.
 5. Explicitly approve or reject a supported transaction in Phantom; no transaction is signed or executed automatically.
-6. Submit supported single- or multi-recipient transfers as appropriate, with multi-recipient transfers atomic and any requested audit memo visible before authorization.
+6. Submit a supported single-recipient transfer or an atomic batch of 2–5 recipients, with any requested audit memo visible before authorization.
 7. See the actual transaction outcome and verify a returned signature using the Devnet Solana Explorer.
 8. View available transaction history without fabricated records or unsupported completeness claims.
 
