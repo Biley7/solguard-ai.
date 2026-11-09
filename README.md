@@ -2,7 +2,7 @@
 
 The Natural-Language Copilot & On-Chain AI Security Firewall for Solana.
 
-The frontend foundation provides a responsive, modular command-center UI. It is currently a presentation-only preview: Gemini, Phantom, and Solana RPC/transaction functionality are not implemented. On-chain fields show unavailable states rather than fabricated values.
+The frontend provides a responsive, modular command center with Phantom public-key connection and live, read-only SOL balance retrieval from the fixed Solana Devnet RPC. Gemini, wallet inspection/risk analysis, transaction construction, and signing are not implemented. Unavailable on-chain fields are not replaced with sample values.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ npm install
 cp .env.example .env
 ```
 
-No credentials are required for the current UI preview. Never place secrets in frontend configuration or commit `.env`.
+No credentials are required for the current UI. Never place secrets in frontend configuration or commit `.env`.
 
 ## Commands
 
@@ -33,14 +33,14 @@ The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint i
 
 ## Project layout
 
-- `frontend/` — Vite-hosted vanilla JavaScript presentation layer, with modular Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Actions clearly report that integrations are not available; the frontend does not call AI or blockchain services.
-- `backend/src/` — Express API, with separate route, controller, service, middleware, validator, and security directories.
-- `blockchain/src/` — Solana RPC, inspection, transaction, memo, and cluster configuration boundaries.
+- `frontend/` — Vite-hosted vanilla JavaScript presentation layer, with modular Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Phantom is used only for public-key connect/disconnect and account-change events.
+- `backend/src/` — Express API, with separate route, controller, service, middleware, validator, and security directories. No AI route is active.
+- `blockchain/src/` — Centralized fixed Devnet configuration and RPC connection. No Mainnet configuration or transaction execution is included.
 - `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
 - `tests/` — Unit, validation, backend, blockchain, and fixture areas.
 - `docs/` — Architecture, API, data model, and security design.
 
-Backend and blockchain directories remain architectural placeholders. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. The UI does not display mock AI results, invented balances, fabricated risk scores, or sample transactions.
+Wallet balance requests use `getBalance()` on `https://api.devnet.solana.com`; the displayed network refers to this app-controlled RPC endpoint. Phantom account cluster metadata is not inferred, and this phase exposes no transaction signing. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. The UI does not display mock AI results, invented balances, fabricated risk scores, or sample transactions.
 
 ## Architecture documents
 

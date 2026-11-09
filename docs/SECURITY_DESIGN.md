@@ -53,6 +53,8 @@ The risk engine is deterministic and heuristic, with stable indicator codes, dat
 - Use HTTPS outside local development; configure allowed origins and security headers when deployment target is selected.
 - Do not treat CORS, hidden UI controls, or prompts as authorization.
 - Health liveness must not disclose secrets or provider internals and must not imply dependency health unless checks actually run.
+- The browser's RPC endpoint is a source-controlled constant (`https://api.devnet.solana.com`), not an environment-variable or user-selectable endpoint. The app currently performs only `getBalance()` reads and exposes no signing path.
+- Phantom's injected provider does not provide a dependable selected-cluster signal through the supported public-key connect interface. The UI's Devnet indicator describes the SolGuard RPC endpoint, not a verified Phantom cluster. Before any future signing feature, explicitly validate wallet-chain capability against Devnet and fail closed if it cannot be verified.
 
 ## Test evidence and release gates
 

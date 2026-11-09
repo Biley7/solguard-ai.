@@ -50,8 +50,8 @@
           <span class="nav-icon" data-icon="settings"></span><span>Settings</span>
         </button>
         <div class="sidebar-network">
-          <span class="status-dot status-dot--amber"></span>
-          <span><strong>Devnet</strong><small>RPC not connected</small></span>
+          <span class="status-dot status-dot--amber" id="rpc-status-dot"></span>
+          <span><strong>Devnet</strong><small id="rpc-status">Checking RPC on connect</small></span>
           <span class="network-lock" data-icon="lock"></span>
         </div>
         <div class="sidebar-foot">SolGuard AI <span>•</span> MVP Preview</div>
@@ -72,9 +72,10 @@
             <span class="topbar-divider"></span>
             <button type="button" class="wallet-connect" data-action="connect-wallet">
               <span class="wallet-indicator"></span>
-              <span>Connect Phantom</span>
+              <span data-wallet-label>Connect Phantom</span>
               <span data-icon="chevron-down"></span>
             </button>
+            <button type="button" class="wallet-disconnect" data-action="disconnect-wallet" hidden>Disconnect</button>
           </div>
         </header>
 

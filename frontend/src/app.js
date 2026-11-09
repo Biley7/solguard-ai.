@@ -5,6 +5,8 @@ import { xrayPage } from './pages/xray.js';
 import { historyPage } from './pages/history.js';
 import { settingsPage } from './pages/settings.js';
 import { icon } from './components/icons.js';
+import { createPhantomWallet, PhantomWalletError } from './services/wallet/phantom-wallet.js';
+import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -15,7 +17,14 @@ const views = {
   settings: { label: 'Settings', render: settingsPage },
 };
 
+const phantomWallet = createPhantomWallet();
+let walletState = { status: 'disconnected', address: null };
+let balanceState = { status: 'idle', sol: null, observedAt: null };
 let toastTimer;
+
+function shortenAddress(address) {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
 
 function showToast(message, tone = 'info') {
   const region = document.querySelector('#toast-region');
@@ -28,12 +37,132 @@ function showToast(message, tone = 'info') {
   }, 4200);
 }
 
+function renderWalletStatus() {
+  const connected = walletState.status === 'connected' && walletState.address;
+  const walletButton = document.querySelector('[data-action="connect-wallet"]');
+  const walletLabel = document.querySelector('[data-wallet-label]');
+  const disconnectButton = document.querySelector('[data-action="disconnect-wallet"]');
+  const addressValue = document.querySelector('#wallet-address-value');
+  const addressNote = document.querySelector('#wallet-address-note');
+  const balanceValue = document.querySelector('#wallet-balance-value');
+  const balanceNote = document.querySelector('#wallet-balance-note');
+  const dataState = document.querySelector('#wallet-data-state');
+  const dataNotice = document.querySelector('#dashboard-data-notice p');
+  const rpcStatus = document.querySelector('#rpc-status');
+  const rpcDot = document.querySelector('#rpc-status-dot');
+  const settingsWalletStatus = document.querySelector('#settings-wallet-status');
+  const settingsRpcStatus = document.querySelector('#settings-rpc-status');
+
+  if (walletButton && walletLabel) {
+    walletButton.disabled = walletState.status === 'connecting';
+    walletButton.classList.toggle('is-connected', Boolean(connected));
+    walletLabel.textContent = walletState.status === 'connecting'
+      ? 'Connecting…'
+      : connected
+        ? shortenAddress(walletState.address)
+        : walletState.status === 'error' ? 'Reconnect Phantom' : 'Connect Phantom';
+    walletButton.title = connected ? walletState.address : 'Connect Phantom wallet';
+    walletButton.setAttribute('aria-label', connected
+      ? `Connected wallet ${walletState.address}`
+      : walletState.status === 'connecting' ? 'Connecting to Phantom' : 'Connect Phantom wallet');
+  }
+  if (disconnectButton) disconnectButton.hidden = !connected;
+  if (addressValue) {
+    addressValue.textContent = connected ? shortenAddress(walletState.address) : 'Not connected';
+    addressValue.title = connected ? walletState.address : '';
+    addressValue.classList.toggle('value-unavailable', !connected);
+  }
+  if (addressNote) addressNote.textContent = connected ? 'Phantom public key' : 'Connect Phantom to begin';
+
+  if (balanceValue && balanceNote) {
+    const balanceLabels = {
+      idle: ['— SOL', connected ? 'Waiting for first Devnet reading' : 'Live balance unavailable'],
+      loading: ['Loading…', 'Querying Devnet RPC'],
+      loaded: [`${balanceState.sol} SOL`, `Devnet · observed ${new Date(balanceState.observedAt).toLocaleTimeString()}`],
+      error: ['Unavailable', 'Devnet RPC request failed'],
+    };
+    const [value, note] = balanceLabels[balanceState.status] ?? balanceLabels.idle;
+    balanceValue.textContent = value;
+    balanceNote.textContent = note;
+    balanceValue.classList.toggle('value-unavailable', balanceState.status !== 'loaded');
+  }
+
+  if (dataState) {
+    const label = connected ? 'PHANTOM CONNECTED' : 'LIVE WALLET DATA NOT CONNECTED';
+    dataState.innerHTML = `<span class="status-dot ${connected ? 'status-dot--green' : 'status-dot--amber'}"></span>${label}`;
+  }
+  if (dataNotice) {
+    dataNotice.innerHTML = connected
+      ? `<strong>Read-only wallet connected.</strong> Public key and balance are queried from the fixed Solana Devnet RPC. Transaction history, risk analysis, and transaction signing are not implemented.`
+      : `<strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.`;
+  }
+
+  const rpcAvailable = balanceState.status === 'loaded';
+  const rpcFailed = balanceState.status === 'error';
+  if (rpcStatus) rpcStatus.textContent = rpcAvailable ? 'Devnet RPC responding' : rpcFailed ? 'Devnet RPC unavailable' : 'Balance not queried';
+  if (rpcDot) {
+    rpcDot.classList.toggle('status-dot--green', rpcAvailable);
+    rpcDot.classList.toggle('status-dot--red', rpcFailed);
+    rpcDot.classList.toggle('status-dot--amber', !rpcAvailable && !rpcFailed);
+  }
+  if (settingsWalletStatus) settingsWalletStatus.textContent = connected ? 'CONNECTED' : 'NOT CONNECTED';
+  if (settingsRpcStatus) {
+    settingsRpcStatus.textContent = rpcAvailable ? 'AVAILABLE' : rpcFailed ? 'UNAVAILABLE' : 'NOT CHECKED';
+  }
+}
+
+async function refreshBalance({ notifyError = false } = {}) {
+  if (walletState.status !== 'connected' || !walletState.address) return;
+  const address = walletState.address;
+  balanceState = { status: 'loading', sol: null, observedAt: null };
+  renderWalletStatus();
+  try {
+    const balance = await fetchDevnetBalance(address);
+    if (walletState.address !== address) return;
+    balanceState = { status: 'loaded', sol: balance.sol, observedAt: balance.observedAt };
+  } catch {
+    if (walletState.address !== address) return;
+    balanceState = { status: 'error', sol: null, observedAt: null };
+    if (notifyError) {
+      showToast('Could not retrieve the balance from Solana Devnet. Check your connection and retry.', 'warning');
+    }
+  }
+  renderWalletStatus();
+}
+
+async function connectWallet() {
+  walletState = { status: 'connecting', address: null };
+  renderWalletStatus();
+  try {
+    await phantomWallet.connect();
+  } catch (error) {
+    walletState = {
+      status: 'disconnected',
+      address: null,
+    };
+    renderWalletStatus();
+    const message = error instanceof PhantomWalletError
+      ? error.message
+      : 'Could not connect to Phantom.';
+    showToast(message, 'warning');
+  }
+}
+
+async function disconnectWallet() {
+  try {
+    await phantomWallet.disconnect();
+  } catch (error) {
+    showToast(error instanceof PhantomWalletError ? error.message : 'Could not disconnect Phantom.', 'warning');
+  }
+}
+
 function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   const view = views[viewName] ? viewName : 'dashboard';
   const content = document.querySelector('#app-content');
   content.innerHTML = views[view].render();
   document.querySelector('#current-page-label').textContent = views[view].label;
   document.title = `${views[view].label} | SolGuard AI`;
+  renderWalletStatus();
 
   document.querySelectorAll('[data-view]').forEach((item) => {
     const active = item.dataset.view === view;
@@ -136,11 +265,23 @@ function onClick(event) {
 
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'connect-wallet') {
-    showToast('Phantom is not connected. Wallet integration is not implemented in this phase.');
+    if (walletState.status === 'connected') {
+      showToast('Phantom is connected. Use Disconnect to end the wallet session.');
+    } else {
+      void connectWallet();
+    }
+  } else if (action === 'disconnect-wallet') {
+    void disconnectWallet();
   } else if (action === 'authorize') {
     showToast('No transaction is available to authorize. Signing is not implemented and no wallet request was made.', 'warning');
   } else if (action === 'refresh-history') {
     showToast('No activity was fetched. Devnet RPC integration is not available.');
+  } else if (action === 'refresh-balance') {
+    if (!walletState.address) {
+      showToast('Connect Phantom before refreshing your Devnet balance.', 'warning');
+    } else {
+      void refreshBalance({ notifyError: true });
+    }
   }
 }
 
@@ -172,6 +313,22 @@ export function mountApp() {
   document.addEventListener('input', (event) => {
     if (event.target.matches('#history-search, #history-status')) updateHistoryEmptyState();
   });
+  phantomWallet.subscribe((state) => {
+    walletState = state;
+    if (state.status !== 'connected') {
+      balanceState = { status: 'idle', sol: null, observedAt: null };
+    }
+    renderWalletStatus();
+    if (state.status === 'connected') void refreshBalance({ notifyError: true });
+    if (state.status === 'error') {
+      showToast('Phantom reported an invalid account state. Reconnect your wallet.', 'warning');
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && walletState.status === 'connected') {
+      void refreshBalance();
+    }
+  });
   window.addEventListener('popstate', () => {
     renderView(window.location.hash.slice(1), { updateHistory: false });
   });
@@ -183,4 +340,7 @@ export function mountApp() {
   });
 
   renderView(window.location.hash.slice(1) || 'dashboard', { updateHistory: false });
+  void phantomWallet.restore().catch((error) => {
+    showToast(error instanceof PhantomWalletError ? error.message : 'Could not restore the Phantom connection.', 'warning');
+  });
 }

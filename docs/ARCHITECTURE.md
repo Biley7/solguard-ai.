@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive, modular presentation-only frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; JSON Schema contracts; and tests for these boundaries. It does not implement AI interpretation, risk analysis, wallet access, blockchain reads, or transactions. UI values that require these integrations are explicitly unavailable.
+This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive, modular frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connect/disconnect, account-change events, trusted-session restoration, and live read-only Devnet balance; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; JSON Schema contracts; and tests for these boundaries. It does not implement AI interpretation, wallet inspection/risk analysis, transaction construction, or signing. UI values that require those integrations are explicitly unavailable.
 
 The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data.
 
@@ -38,7 +38,7 @@ Gemini has no interface to Phantom, signing, transaction construction, simulatio
 
 ### A. Frontend presentation — `frontend/`
 
-Vanilla JavaScript ES modules, served and built by Vite. The current UI includes Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Transaction preview is integrated into the Command Center. These are presentation surfaces only; they do not call AI, wallet, or blockchain integrations.
+Vanilla JavaScript ES modules, served and built by Vite. The current UI includes Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Transaction preview is integrated into the Command Center. Phantom is used only for public-key connection state; the frontend reads balances through the fixed Devnet connection and makes no signing request.
 
 Frontend responsibilities:
 
@@ -56,7 +56,7 @@ The backend's interpret endpoint proposes intent only. It must not import or cal
 
 ### C. Blockchain integration — `blockchain/src/`
 
-Devnet-only RPC configuration, read-only account inspection, transaction construction, simulation, and submission/confirmation primitives. Transaction construction uses validated contracts and supports either one recipient or an atomic batch of 2–5 recipients.
+Devnet-only RPC configuration and connection are implemented. Read-only account inspection beyond the connected wallet balance, transaction construction, simulation, and submission/confirmation remain future work. Transaction construction must use validated contracts and support either one recipient or an atomic batch of 2–5 recipients.
 
 Phantom is a browser-injected provider; its manager belongs in `frontend/src/services/wallet/`, not in a Node-only backend package. Client-side transaction construction and wallet submission are orchestrated by frontend blockchain services against the blockchain boundaries. No server service can sign as the user.
 

@@ -6,24 +6,24 @@ export function settingsPage() {
     ${pageHeading('PREFERENCES & CONNECTIONS', 'Settings', 'Review the environment and integration status for this preview.')}
     <section class="notice notice--warning">
       <span class="notice-icon">${icon('info')}</span>
-      <p><strong>Configuration is intentionally limited.</strong> This UI phase does not connect wallets, call Gemini, or query blockchain services.</p>
+      <p><strong>Wallet access is read-only in this phase.</strong> Phantom can provide your public key; the app reads SOL balance from the fixed Devnet RPC. Transactions and AI requests are not implemented.</p>
     </section>
     <div class="settings-grid">
       <section class="panel settings-panel">
         ${panelHeader('Network', 'FIXED FOR MVP')}
         <dl class="data-list settings-list">
           ${fieldRow('Target network', '<span class="network-value">Solana Devnet</span>')}
-          ${fieldRow('RPC connection', unavailableValue('Not connected'))}
+          ${fieldRow('RPC endpoint', '<span class="mono">api.devnet.solana.com</span>')}
           ${fieldRow('Mainnet access', '<span class="state-denied">Disabled</span>')}
         </dl>
-        <p class="panel-description">The MVP is restricted to Devnet. Network switching is not available.</p>
+        <p class="panel-description">The Devnet indicator describes SolGuard RPC reads. Phantom does not expose a dependable selected-cluster value through this connection interface. Since transactions are not implemented, SolGuard cannot send anything to a different cluster.</p>
       </section>
       <section class="panel settings-panel">
         ${panelHeader('Connected services', 'INTEGRATION STATUS')}
         <ul class="integration-list">
-          <li><span class="integration-icon">${icon('shield')}</span><span><strong>Phantom Wallet</strong><small>Browser authorization provider</small></span><span class="tag tag--muted">NOT CONNECTED</span></li>
+          <li><span class="integration-icon">${icon('shield')}</span><span><strong>Phantom Wallet</strong><small>Public address only; no signing in this phase</small></span><span class="tag tag--muted" id="settings-wallet-status">NOT CONNECTED</span></li>
           <li><span class="integration-icon">${icon('spark')}</span><span><strong>Gemini AI</strong><small>Server-side intent interpretation</small></span><span class="tag tag--muted">NOT CONFIGURED</span></li>
-          <li><span class="integration-icon">${icon('grid')}</span><span><strong>Solana RPC</strong><small>Devnet account and transaction data</small></span><span class="tag tag--muted">NOT CONNECTED</span></li>
+          <li><span class="integration-icon">${icon('grid')}</span><span><strong>Solana RPC</strong><small>Read-only Devnet balance queries</small></span><span class="tag tag--muted" id="settings-rpc-status">NOT CHECKED</span></li>
         </ul>
       </section>
       <section class="panel settings-panel settings-security">

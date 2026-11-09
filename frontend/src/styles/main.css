@@ -332,6 +332,26 @@ button:disabled {
   transition: border-color 140ms ease, background-color 140ms ease;
 }
 
+.wallet-connect.is-connected .wallet-indicator {
+  background: var(--green);
+}
+
+.wallet-disconnect {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: #aab9b0;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.wallet-disconnect:hover {
+  border-color: #53665b;
+  color: #e0e9e3;
+}
+
 .wallet-connect:hover {
   border-color: #476253;
   background: #1b2822;
@@ -713,6 +733,12 @@ button:disabled {
 
   .wallet-connect > .icon {
     display: none;
+  }
+
+  .wallet-disconnect {
+    min-width: 35px;
+    padding: 0 6px;
+    font-size: 9px;
   }
 
   .wallet-indicator {

@@ -14,16 +14,16 @@ function metricCard(label, value, note, iconName) {
 
 export function dashboardPage() {
   return `
-    ${pageHeading('OVERVIEW', 'Command Center', 'A clear view of your wallet security and transfer activity.', '<span class="data-state"><span class="status-dot status-dot--amber"></span>LIVE DATA NOT CONNECTED</span>')}
+    ${pageHeading('OVERVIEW', 'Command Center', 'A clear view of your wallet security and transfer activity.', '<span class="data-state" id="wallet-data-state"><span class="status-dot status-dot--amber"></span>LIVE DATA NOT CONNECTED</span>')}
 
-    <section class="notice notice--info" aria-label="Data availability notice">
+    <section class="notice notice--info" id="dashboard-data-notice" aria-label="Data availability notice">
       <span class="notice-icon">${icon('info')}</span>
-      <p><strong>Preview environment.</strong> No wallet or Devnet RPC is connected. On-chain values and activity are unavailable; nothing on this screen represents live blockchain data.</p>
+      <p><strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.</p>
     </section>
 
     <section class="metric-grid" aria-label="Wallet overview">
-      ${metricCard('CONNECTED WALLET', unavailableValue('Not connected'), 'Connect Phantom to begin', 'shield')}
-      ${metricCard('DEVNET BALANCE', unavailableValue('— SOL'), 'Live balance unavailable', 'grid')}
+      ${metricCard('CONNECTED WALLET', '<span id="wallet-address-value" class="value-unavailable">Not connected</span>', '<span id="wallet-address-note">Connect Phantom to begin</span>', 'shield')}
+      ${metricCard('DEVNET BALANCE', '<span id="wallet-balance-value" class="value-unavailable">— SOL</span>', '<span id="wallet-balance-note">Live balance unavailable</span><button class="balance-refresh" type="button" data-action="refresh-balance" aria-label="Refresh Devnet SOL balance" title="Refresh Devnet SOL balance">Refresh</button>', 'grid')}
       ${metricCard('TRANSACTIONS PROCESSED', unavailableValue('—'), 'No verified activity loaded', 'history')}
       ${metricCard('SECURITY SCANS', unavailableValue('—'), 'No wallet assessments yet', 'scan')}
     </section>
