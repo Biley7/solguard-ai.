@@ -8,6 +8,8 @@ test('risk assessments cannot claim an unavailable score or category', () => {
     score: null,
     category: 'unavailable',
     indicators: [],
+    missingInformation: ['Balance could not be retrieved.'],
+    recommendedAction: 'Retry the inspection.',
     assessedAt: '2026-11-08T00:00:00Z',
     disclaimer: 'Heuristic information only; this assessment does not guarantee wallet safety.',
   };

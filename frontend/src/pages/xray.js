@@ -1,5 +1,5 @@
 import { icon } from '../components/icons.js';
-import { emptyState, fieldRow, pageHeading, panelHeader, unavailableValue } from '../components/ui.js';
+import { emptyState, pageHeading, panelHeader } from '../components/ui.js';
 
 export function xrayPage() {
   return `
@@ -19,26 +19,9 @@ export function xrayPage() {
       <div class="form-feedback" data-feedback="xray" role="status" aria-live="polite"></div>
     </section>
     <section class="panel xray-results">
-      ${panelHeader('Wallet profile', 'NO ADDRESS LOADED')}
-      <div class="xray-profile-heading">
-        <div class="profile-avatar">${icon('shield')}</div>
-        <div><strong>Address details unavailable</strong><span class="mono">${unavailableValue('No address searched')}</span></div>
-        <span class="tag tag--muted">NOT ASSESSED</span>
-      </div>
-      <div class="xray-facts-grid">
-        <dl class="data-list">
-          ${fieldRow('Network', '<span class="network-value">Devnet target</span>')}
-          ${fieldRow('Account owner / type', unavailableValue('Unavailable'))}
-          ${fieldRow('Balance', unavailableValue('Unavailable'))}
-        </dl>
-        <dl class="data-list">
-          ${fieldRow('First seen / history', unavailableValue('Unavailable'))}
-          ${fieldRow('Recent activity', unavailableValue('Unavailable'))}
-          ${fieldRow('RPC observation', unavailableValue('Not queried'))}
-        </dl>
-      </div>
-      <div class="xray-assessment">
-        ${emptyState('No assessment available', 'Connect to Devnet RPC to inspect this address. An unavailable result is not a clean bill of health.', 'info')}
+      ${panelHeader('Wallet profile', '<span data-inspection-meta>NO ADDRESS LOADED</span>')}
+      <div id="xray-result">
+        ${emptyState('No address inspected', 'Inspect a public address to load its Devnet account data and heuristic assessment.', 'search')}
       </div>
     </section>`;
 }

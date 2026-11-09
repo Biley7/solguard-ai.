@@ -55,15 +55,27 @@ Schema: `shared/schemas/RiskAssessment.schema.json`.
   "status": "assessed",
   "score": 0,
   "category": "low",
-  "indicators": [],
+  "indicators": [
+    {
+      "code": "no_recent_history_observed",
+      "severity": "info",
+      "scoreContribution": 0,
+      "summary": "No Devnet signatures were returned for this address.",
+      "evidence": ["No history was returned in the queried recent-signature window; a new or inactive wallet is not inherently suspicious."]
+    }
+  ],
+  "missingInformation": ["Account age and complete transaction history cannot be established from a query limited to 20 recent signatures."],
+  "recommendedAction": "Verify the address through a trusted channel and review the exact transaction before authorizing it.",
   "assessedAt": "2026-01-01T00:00:00.000Z",
   "disclaimer": "Heuristic information only; this assessment does not guarantee wallet safety."
 }
 ```
 
-The values above illustrate field shape only; they are not a real assessment, wallet finding, or scoring recommendation. In production, score/category must be generated from documented evidence and rules. For unavailable input, use `status: "unavailable"`, `score: null`, `category: "unavailable"`, and no fabricated evidence.
+This is a shape example, not a live wallet finding. The current deterministic heuristic gives informational account/history observations zero points: no-history, zero balance, activity count, System Program ownership, program ownership, and executable status alone are not risk signals. A complete RPC response with no scored signal produces score `0` / `low` observed risk—not a safety conclusion. RPC failures or missing core facts produce `status: "unavailable"`, `score: null`, `category: "unavailable"`, missing-information details, and a retry/verification recommendation.
 
-Each indicator contains a stable `code`, severity (`info`, `low`, `medium`, `high`), a user-readable summary, and evidence strings grounded in observed data. Do not infer safety solely from absence of available history.
+Each indicator contains a stable `code`, severity, `scoreContribution`, a user-readable summary, and evidence strings grounded in observed data. The current metadata-only inspection does not assert suspicious patterns; future scoring weights require separately documented, reliable indicators and tests. Do not infer safety solely from absence of available history.
+
+Category boundaries are low `0–29`, moderate `30–59`, high `60–79`, and critical `80–100`. The score is the sum of factor `scoreContribution` values, clamped to `0–100`, and category is derived from those boundaries. The present metadata-only ruleset intentionally has no nonzero points because none of the queried facts independently supports a maliciousness claim. Non-executable program-owned data is not decoded by this wallet-focused engine and therefore yields an unavailable score rather than a low score.
 
 ## `WalletSecurityReport`
 
@@ -77,11 +89,27 @@ Schema: `shared/schemas/WalletSecurityReport.schema.json`.
   "accountStatus": "found",
   "dataAvailability": "available",
   "observedAt": "ISO 8601 UTC timestamp",
+  "balanceLamports": "canonical integer string or null",
+  "accountInfo": {
+    "lamports": "canonical integer string",
+    "owner": "Base58 public key",
+    "executable": false,
+    "space": "canonical integer string"
+  },
+  "accountType": "system_account | program | program_owned_account | not_found | unknown",
+  "history": {
+    "available": false,
+    "signaturesInspected": 0,
+    "limit": 20,
+    "recentSignatures": []
+  },
+  "rpcFailures": [],
+  "missingInformation": ["Account age and complete transaction history are not established."],
   "riskAssessment": "RiskAssessment"
 }
 ```
 
-This model binds any assessment to an address, network, source, and observation time. `not_found` is not equivalent to malicious; `unavailable` is not equivalent to safe. The embedded assessment must follow the unavailable-state convention when evidence is insufficient.
+`inspectWalletSecurity(address)` concurrently reads balance, account info, and up to 20 recent signatures from the fixed Devnet RPC. Account types distinguish System Program-owned accounts, executable programs, non-executable program-owned data accounts, not-found accounts, and unknown metadata. Non-executable program-owned data is currently unsupported by the wallet-focused heuristic and receives an unverified score. A missing account or empty history is not malicious. A failed core RPC operation makes risk `unavailable`, never low. The signature window does not establish account age or complete history.
 
 ## `TransactionPreview`
 

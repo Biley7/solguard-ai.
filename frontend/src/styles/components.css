@@ -646,6 +646,93 @@
   margin-top: 15px;
 }
 
+.dashboard-scan-form {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dashboard-scan-form .input-with-icon {
+  min-height: 34px;
+}
+
+.dashboard-scan-form .input-with-icon input {
+  font-size: 9px;
+}
+
+.dashboard-scan-form .button {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.dashboard-scan-result {
+  margin-top: 10px;
+}
+
+.dashboard-scan-result > .empty-state {
+  min-height: 96px;
+  padding: 12px 8px;
+}
+
+.dashboard-scan-result > .empty-state p {
+  font-size: 9px;
+}
+
+.inspection-loading {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #96a79c;
+  text-align: center;
+}
+
+.inspection-loading strong {
+  color: #cbd7cf;
+  font-size: 12px;
+}
+
+.inspection-loading > span:last-child {
+  color: #7d8d83;
+  font-size: 10px;
+}
+
+.inspection-spinner {
+  width: 23px;
+  height: 23px;
+  margin-bottom: 3px;
+  border: 2px solid #35443b;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: inspection-spin 800ms linear infinite;
+}
+
+@keyframes inspection-spin {
+  to { transform: rotate(360deg); }
+}
+
+.assessment-banner--unknown {
+  border-color: #51432a;
+  background: #211e18;
+}
+
+.assessment-banner--unknown .assessment-mark {
+  border-color: #59492d;
+  background: #292319;
+  color: var(--amber);
+}
+
+.score-placeholder--moderate {
+  color: var(--amber);
+}
+
+.score-placeholder--high,
+.score-placeholder--critical {
+  color: var(--red);
+}
+
 .assessment-banner {
   display: flex;
   align-items: center;
@@ -734,6 +821,241 @@
   color: #85948b;
   font-size: 10px;
   line-height: 1.55;
+}
+
+.risk-indicators,
+.missing-information {
+  display: grid;
+  gap: 0;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.risk-indicators li {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 30px;
+  align-items: start;
+  gap: 9px;
+  padding: 9px 0;
+  border-top: 1px solid #2a3830;
+}
+
+.factor-severity {
+  padding-top: 2px;
+  color: #9bab9f;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.factor-severity--medium,
+.factor-severity--high,
+.factor-severity--critical {
+  color: var(--amber);
+}
+
+.risk-indicators li > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.risk-indicators strong {
+  color: #bfcdc4;
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.risk-indicators small {
+  margin-top: 2px;
+  color: #819087;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.factor-points {
+  color: #7d8b82;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-align: right;
+}
+
+.recommended-action {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border: 1px solid #2c4134;
+  border-radius: 4px;
+  background: #18231d;
+  color: #91a398;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.recommended-action strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #c2d3c8;
+  font-size: 9px;
+}
+
+.missing-information {
+  gap: 5px;
+  padding: 9px 11px 9px 24px;
+  border: 1px solid #4a3e27;
+  border-radius: 4px;
+  background: #211e18;
+  color: #c2b487;
+  font-size: 9px;
+  list-style: disc;
+}
+
+.inspection-provenance {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 11px;
+  color: #7e8d83;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.inspection-provenance .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.risk-disclaimer {
+  margin: 6px 0 0;
+  color: #6f7f75;
+  font-size: 8px;
+}
+
+.recent-signatures {
+  margin-top: 13px;
+  border-top: 1px solid #29362f;
+}
+
+.recent-signatures h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 11px 0 4px;
+  color: #b9c7bf;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.recent-signatures h3 span {
+  color: #78877e;
+  font-size: 8px;
+  font-weight: 450;
+}
+
+.recent-signatures ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-signatures li {
+  display: grid;
+  grid-template-columns: 56px minmax(90px, 1fr) minmax(110px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid #25312b;
+  color: #7f8e85;
+  font-size: 8px;
+}
+
+.signature-state {
+  color: #a4b5aa;
+}
+
+.signature-state--failed {
+  color: var(--amber);
+}
+
+.signature-value {
+  overflow: hidden;
+  color: #aab9b0;
+  text-overflow: ellipsis;
+}
+
+.inspection-error {
+  border-color: #4a3431;
+  border-radius: 4px;
+  background: #211a19;
+}
+
+.inspection-error .empty-state {
+  min-height: 150px;
+}
+
+.inspection-error .empty-state-icon {
+  border-color: #55403b;
+  color: #d29a87;
+}
+
+.inspection-content--compact .assessment-banner {
+  gap: 8px;
+  padding: 9px;
+}
+
+.inspection-content--compact .assessment-mark {
+  width: 31px;
+  height: 31px;
+}
+
+.inspection-content--compact .assessment-copy strong {
+  font-size: 10px;
+}
+
+.inspection-content--compact .assessment-copy p {
+  font-size: 8px;
+}
+
+.inspection-content--compact .score-placeholder > span {
+  font-size: 18px;
+}
+
+.inspection-content--compact .scanner-facts-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 4px;
+}
+
+.inspection-content--compact .scanner-facts-grid .data-row {
+  min-height: 29px;
+}
+
+.inspection-content--compact .risk-factors {
+  margin-top: 9px;
+  padding: 9px;
+}
+
+.inspection-content--compact .risk-indicators li {
+  grid-template-columns: 48px minmax(0, 1fr) 25px;
+  gap: 6px;
+}
+
+.inspection-content--compact .risk-indicators small {
+  font-size: 8px;
+}
+
+.inspection-content--compact .recommended-action {
+  font-size: 8px;
+}
+
+.inspection-content--compact .inspection-provenance,
+.inspection-content--compact .risk-disclaimer {
+  font-size: 8px;
+}
+
+.inspection-content--compact .recent-signatures {
+  display: none;
 }
 
 .xray-profile-heading {
@@ -1039,6 +1361,15 @@
 }
 
 @media (max-width: 480px) {
+  .dashboard-scan-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-scan-form .button {
+    width: 100%;
+  }
+
   .assessment-banner {
     gap: 9px;
     padding: 11px;

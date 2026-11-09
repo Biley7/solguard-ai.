@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive, modular frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connect/disconnect, account-change events, trusted-session restoration, and live read-only Devnet balance; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; JSON Schema contracts; and tests for these boundaries. It does not implement AI interpretation, wallet inspection/risk analysis, transaction construction, or signing. UI values that require those integrations are explicitly unavailable.
+This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connection and live read-only Devnet balance; Devnet wallet security inspection and a deterministic heuristic risk assessment; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; and tests for these boundaries. AI interpretation, transaction construction, and signing are not implemented.
 
 The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data.
 
@@ -56,7 +56,7 @@ The backend's interpret endpoint proposes intent only. It must not import or cal
 
 ### C. Blockchain integration — `blockchain/src/`
 
-Devnet-only RPC configuration and connection are implemented. Read-only account inspection beyond the connected wallet balance, transaction construction, simulation, and submission/confirmation remain future work. Transaction construction must use validated contracts and support either one recipient or an atomic batch of 2–5 recipients.
+Devnet-only RPC configuration, connection, read-only balance/account/signature inspection, and a deterministic metadata-only heuristic assessment are implemented. Transaction construction, simulation, and submission/confirmation remain future work. Transaction construction must use validated contracts and support either one recipient or an atomic batch of 2–5 recipients.
 
 Phantom is a browser-injected provider; its manager belongs in `frontend/src/services/wallet/`, not in a Node-only backend package. Client-side transaction construction and wallet submission are orchestrated by frontend blockchain services against the blockchain boundaries. No server service can sign as the user.
 
@@ -87,8 +87,8 @@ These are architectural contracts, not implementations. Use dependency injection
 | Intent validator (`shared/validation/`) | Strict shape/semantic validation, reject ambiguous/unsupported intent, validate addresses and bounds, convert decimal SOL to canonical lamports. | `validateCandidate(candidate) -> TransactionIntent` or validation issues. |
 | Solana connection manager | Create/reuse a read/write RPC connection explicitly configured for Devnet; fail closed for other clusters. | `getDevnetConnection() -> Connection`; no implicit Mainnet fallback. |
 | Phantom wallet manager | Browser-only provider discovery, connect/disconnect, public-key/network checks, and wallet authorization request. Never handles key export or seed phrases. | `connect()`, `disconnect()`, `getPublicKey()`, and `requestAuthorization(unsignedTransaction, { userGesture })`. |
-| Wallet inspection service | Query account state and other available RPC data; report source, observation time, and missing/partial data honestly. | `inspectWallet(address) -> WalletSecurityReport` with raw observed facts kept distinct from interpretation. |
-| Risk assessment engine (`blockchain/src/security/`) | Apply deterministic, documented heuristics to observed evidence; produce indicators and limitations, never safety guarantees. | `assessWallet(observedFacts) -> RiskAssessment`; unavailable inputs yield unavailable assessment, not invented evidence. |
+| Wallet inspection service (`blockchain/src/inspection/`) | Concurrently query Devnet balance, account info, and up to 20 recent signatures; normalize account types and partial failures. | `inspectWalletSecurity(address) -> WalletSecurityReport` with observed RPC facts separate from score interpretation. |
+| Risk assessment engine (`blockchain/src/security/`) | Produce a deterministic 0–100 observed-risk heuristic, factors, missing information, and recommended action. Neutral metadata alone scores zero; failed/missing core RPC data is unknown. | `assessWalletRisk(observation) -> RiskAssessment`; no AI inputs or safety guarantees. |
 | Transaction builder | Build only supported SOL transfer and optional memo instructions from a validated intent and explicit payer/network. | `buildTransaction(intent, payer, memoChoice) -> TransactionPreview + unsigned transaction`; never signs. |
 | Transaction simulator | Simulate the unsigned transaction against Devnet and translate actual RPC response into preview status. | `simulate(unsignedTransaction) -> SimulationResult`; unavailable/error is not success. |
 | Transaction execution service | After explicit user action, orchestrate Phantom authorization/submission and observe RPC confirmation. No autonomous path. | `executeWithWallet(unsignedTransaction, userGesture) -> TransactionResult`; asks the Phantom manager to authorize. |

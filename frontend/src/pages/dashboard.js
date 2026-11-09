@@ -45,19 +45,14 @@ export function dashboardPage() {
 
       <section class="panel security-panel">
         ${panelHeader('Security Scanner', 'RECIPIENT CHECK')}
-        <div class="security-status-block">
-          <div class="security-emblem">${icon('shield')}</div>
-          <div>
-            <span class="eyebrow">CURRENT SECURITY STATUS</span>
-            <strong>Assessment unavailable</strong>
-            <p>No wallet data has been inspected.</p>
-          </div>
+        <form class="dashboard-scan-form" data-form="dashboard-scan">
+          <label class="sr-only" for="dashboard-scan-address">Recipient public address</label>
+          <div class="input-with-icon">${icon('search')}<input id="dashboard-scan-address" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Recipient public address" required /></div>
+          <button type="submit" class="button button--secondary">${icon('scan')}<span>Inspect</span></button>
+        </form>
+        <div id="dashboard-scan-result" class="dashboard-scan-result">
+          ${emptyState('No recipient inspected', 'Run a read-only Devnet check before preparing a transfer.', 'shield')}
         </div>
-        <dl class="data-list">
-          ${fieldRow('Risk score', unavailableValue('Not assessed'))}
-          ${fieldRow('Risk factors', unavailableValue('No evidence'))}
-          ${fieldRow('Account history', unavailableValue('Not loaded'))}
-        </dl>
         <div class="panel-bottom-action">${button('Open Wallet Scanner', { view: 'scanner', kind: 'text', iconName: 'arrow' })}</div>
       </section>
 

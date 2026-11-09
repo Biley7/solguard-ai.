@@ -2,7 +2,7 @@
 
 The Natural-Language Copilot & On-Chain AI Security Firewall for Solana.
 
-The frontend provides a responsive, modular command center with Phantom public-key connection and live, read-only SOL balance retrieval from the fixed Solana Devnet RPC. Gemini, wallet inspection/risk analysis, transaction construction, and signing are not implemented. Unavailable on-chain fields are not replaced with sample values.
+The frontend provides a responsive, modular command center with Phantom public-key connection, live read-only Devnet balance, and recipient Wallet Scanner/Wallet X-Ray inspection. The scanner reports account metadata and up to 20 recent signatures with a deterministic, explicitly heuristic risk assessment. Gemini, transaction construction, and signing are not implemented. Unavailable on-chain fields are not replaced with sample values.
 
 ## Requirements
 
@@ -35,12 +35,12 @@ The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint i
 
 - `frontend/` — Vite-hosted vanilla JavaScript presentation layer, with modular Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Phantom is used only for public-key connect/disconnect and account-change events.
 - `backend/src/` — Express API, with separate route, controller, service, middleware, validator, and security directories. No AI route is active.
-- `blockchain/src/` — Centralized fixed Devnet configuration and RPC connection. No Mainnet configuration or transaction execution is included.
+- `blockchain/src/` — Centralized fixed Devnet configuration, RPC connection, wallet inspection, and separate deterministic risk rules. No Mainnet configuration or transaction execution is included.
 - `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
 - `tests/` — Unit, validation, backend, blockchain, and fixture areas.
 - `docs/` — Architecture, API, data model, and security design.
 
-Wallet balance requests use `getBalance()` on `https://api.devnet.solana.com`; the displayed network refers to this app-controlled RPC endpoint. Phantom account cluster metadata is not inferred, and this phase exposes no transaction signing. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. The UI does not display mock AI results, invented balances, fabricated risk scores, or sample transactions.
+Wallet and scanner reads use `https://api.devnet.solana.com`; the displayed network refers to this app-controlled RPC endpoint. Scanner data includes a maximum of 20 recent signatures, not complete history. Failed core reads produce an unknown assessment; no history, zero balance, or program-account metadata alone is treated as suspicious. Phantom account cluster metadata is not inferred, and this phase exposes no transaction signing. `GET /api/health` reports only that the local API process is responding; the AI interpretation contract is documented but not implemented. The UI does not display mock AI results, invented balances, fabricated risk scores, or sample transactions.
 
 ## Architecture documents
 

@@ -7,6 +7,8 @@ import { settingsPage } from './pages/settings.js';
 import { icon } from './components/icons.js';
 import { createPhantomWallet, PhantomWalletError } from './services/wallet/phantom-wallet.js';
 import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
+import { inspectWalletSecurity, WalletInspectionError } from '../../blockchain/src/inspection/wallet-security.js';
+import { walletInspectionError, walletInspectionView } from './components/wallet-inspection.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -220,12 +222,63 @@ function handleCopilotSubmit(form) {
   }
 }
 
-function handleAddressSubmit(form) {
+async function handleAddressSubmit(form) {
   const kind = form.dataset.form;
-  const feedback = kind === 'scanner'
-    ? 'No wallet scan performed. Solana RPC is not connected; the entered address was not queried.'
-    : 'No address analysis performed. Solana RPC is not connected; the entered address was not queried.';
-  setFeedback(form, feedback, 'info');
+  const address = form.elements.address.value.trim();
+  const targetId = {
+    scanner: 'scanner-result',
+    xray: 'xray-result',
+    'dashboard-scan': 'dashboard-scan-result',
+  }[kind];
+  const target = document.getElementById(targetId);
+  const submitButton = form.querySelector('[type="submit"]');
+  if (!target || !submitButton) return;
+  const inspectionMeta = form.closest('.main-content')?.querySelector('[data-inspection-meta]');
+
+  const originalButton = submitButton.innerHTML;
+  submitButton.disabled = true;
+  submitButton.setAttribute('aria-busy', 'true');
+  submitButton.innerHTML = `${icon('scan')}<span>Inspecting…</span>`;
+  if (inspectionMeta) inspectionMeta.textContent = 'INSPECTING DEVNET';
+  target.innerHTML = `
+    <div class="inspection-loading" role="status" aria-live="polite">
+      <span class="inspection-spinner" aria-hidden="true"></span>
+      <strong>Inspecting Devnet account</strong>
+      <span>Querying balance, account metadata, and recent signatures.</span>
+    </div>`;
+  const feedback = form.querySelector('[data-feedback]');
+  if (feedback) {
+    feedback.textContent = '';
+    feedback.className = 'form-feedback';
+  }
+
+  try {
+    const report = await inspectWalletSecurity(address);
+    const currentTarget = document.getElementById(targetId);
+    if (currentTarget) {
+      currentTarget.innerHTML = walletInspectionView(report, { compact: kind === 'dashboard-scan' });
+    }
+    if (inspectionMeta) {
+      inspectionMeta.textContent = report.riskAssessment.status === 'unavailable'
+        ? 'UNVERIFIED'
+        : 'DEVNET DATA LOADED';
+    }
+    if (report.riskAssessment.status === 'unavailable' && feedback) {
+      setFeedback(form, 'Some required Devnet reads failed. This result is unverified, not low risk.', 'warning');
+    }
+  } catch (error) {
+    const message = error instanceof WalletInspectionError
+      ? error.message
+      : 'The Devnet wallet inspection could not be completed.';
+    const currentTarget = document.getElementById(targetId);
+    if (currentTarget) currentTarget.innerHTML = walletInspectionError(message);
+    if (inspectionMeta) inspectionMeta.textContent = 'INSPECTION FAILED';
+    if (feedback) setFeedback(form, message, 'warning');
+  } finally {
+    submitButton.disabled = false;
+    submitButton.removeAttribute('aria-busy');
+    submitButton.innerHTML = originalButton;
+  }
 }
 
 function updateHistoryEmptyState() {
@@ -292,8 +345,8 @@ function onSubmit(event) {
 
   if (form.dataset.form === 'copilot') {
     handleCopilotSubmit(form);
-  } else if (form.dataset.form === 'scanner' || form.dataset.form === 'xray') {
-    handleAddressSubmit(form);
+  } else if (form.dataset.form === 'scanner' || form.dataset.form === 'xray' || form.dataset.form === 'dashboard-scan') {
+    void handleAddressSubmit(form);
   }
 }
 

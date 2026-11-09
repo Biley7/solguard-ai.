@@ -4,7 +4,7 @@
   "title": "WalletSecurityReport",
   "type": "object",
   "additionalProperties": false,
-  "required": ["address", "network", "source", "accountStatus", "dataAvailability", "observedAt", "riskAssessment"],
+  "required": ["address", "network", "source", "accountStatus", "dataAvailability", "observedAt", "balanceLamports", "accountInfo", "accountType", "history", "rpcFailures", "missingInformation", "riskAssessment"],
   "properties": {
     "address": {
       "type": "string",
@@ -27,6 +27,62 @@
     "observedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "balanceLamports": {
+      "type": ["string", "null"],
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "accountInfo": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lamports", "owner", "executable", "space"],
+          "properties": {
+            "lamports": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+            "owner": { "type": "string", "minLength": 32, "maxLength": 44, "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
+            "executable": { "type": "boolean" },
+            "space": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }
+          }
+        }
+      ]
+    },
+    "accountType": {
+      "enum": ["system_account", "program", "program_owned_account", "not_found", "unknown"]
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "signaturesInspected", "limit", "recentSignatures"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "signaturesInspected": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "limit": { "const": 20 },
+        "recentSignatures": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signature", "slot", "blockTime", "failed"],
+            "properties": {
+              "signature": { "type": "string", "minLength": 1 },
+              "slot": { "type": "integer", "minimum": 0 },
+              "blockTime": { "type": ["string", "null"], "format": "date-time" },
+              "failed": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "rpcFailures": {
+      "type": "array",
+      "items": { "enum": ["balance", "accountInfo", "signatures"] }
+    },
+    "missingInformation": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
     },
     "riskAssessment": {
       "$ref": "urn:solguard:schema:RiskAssessment"

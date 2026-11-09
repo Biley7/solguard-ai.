@@ -43,7 +43,7 @@ Prompt instructions are not a security control. Schema and semantic validation a
 
 ## Risk assessment
 
-The risk engine is deterministic and heuristic, with stable indicator codes, data provenance, and explanations grounded in observed facts. Data gaps lower evidence availability; they do not prove safety or maliciousness. Wallet age, balance, or transaction count alone must never classify an address as malicious. The UI must show the disclaimer from the shared model and must not automatically block or authorize based solely on a score unless a separately approved requirement defines such behavior.
+The risk engine is deterministic and heuristic, with stable indicator codes, score contributions, data provenance, missing-information details, and a recommended action grounded in observed facts. It inspects at most 20 recent Devnet signatures. Data gaps lower evidence availability; a failed core RPC read yields an unavailable score, never low risk. No-history, zero balance, transaction count, System Program ownership, or executable status alone contribute zero points and do not classify an address as malicious. Non-executable program-owned data is not decoded and is currently unsupported by the wallet-focused heuristic, so its score is unverified. The current metadata-only ruleset has no validated suspicious-pattern signal, so a complete supported inspection with neutral facts scores 0 (low observed risk); this is explicitly not a probability or safety claim. Any future nonzero scoring rules require reliable evidence, documented weights, and tests. The UI must show the disclaimer from the shared model and must not automatically block or authorize based solely on a score.
 
 ## API, operational, and browser security
 
