@@ -28,7 +28,7 @@
 
 The Gemini service interface returns `unknown` provider data. An intent parser may decode it, but only the deterministic intent validator can produce the normalized `TransactionIntent` contract. The AI service package must not depend on blockchain transaction modules or Phantom. `/api/ai/interpret` has no signing-related input or output fields.
 
-Prompt instructions are not a security control. Schema and semantic validation are mandatory even if Gemini is configured for structured output.
+Prompt instructions are not a security control. Schema and semantic validation are mandatory even if Gemini is configured for structured output. Candidate recipient addresses must exactly match public keys stated in the user's prompt; amount strings must be explicitly stated except for a deterministic equal split derived from an explicit total. The validator checks recipient totals in integer lamports and rejects any AI-added memo not stated verbatim by the user. If Gemini is unavailable, the limited fallback parser is labeled in the response and returns clarification instead of guessing when it cannot parse safely.
 
 ## Amount and transaction safety
 
@@ -47,7 +47,7 @@ The risk engine is deterministic and heuristic, with stable indicator codes, sco
 
 ## API, operational, and browser security
 
-- Add strict request body size limits, per-IP/session rate limiting, and consistent safe error handling before exposing Gemini.
+- Enforce strict request body and UTF-8 prompt size limits, per-IP/session rate limiting, and consistent safe error handling around Gemini.
 - Keep secrets in server-side environment configuration; never prefix secrets with Vite's public environment prefix.
 - Do not log prompts or public addresses by default. If operational logging is needed, minimize and redact.
 - Use HTTPS outside local development; configure allowed origins and security headers when deployment target is selected.

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solguard:schema:InterpretationCandidate",
+  "title": "InterpretationCandidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "intent",
+    "distribution",
+    "totalAmountSol",
+    "recipients",
+    "memo",
+    "explanation",
+    "missingInformation",
+    "clarificationQuestion"
+  ],
+  "properties": {
+    "status": {
+      "enum": ["ready", "clarification", "unsupported"]
+    },
+    "intent": {
+      "enum": ["transfer", "unsupported"]
+    },
+    "distribution": {
+      "enum": ["equal", "explicit", "unknown"]
+    },
+    "totalAmountSol": {
+      "type": "string",
+      "maxLength": 21,
+      "pattern": "^(?:(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,9})?)?$"
+    },
+    "recipients": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["address", "amountSol"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 44,
+            "pattern": "^[1-9A-HJ-NP-Za-km-z]{0,44}$"
+          },
+          "amountSol": {
+            "type": "string",
+            "maxLength": 21,
+            "pattern": "^(?:(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,9})?)?$"
+          }
+        }
+      }
+    },
+    "memo": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "explanation": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "missingInformation": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "maxLength": 120
+      }
+    },
+    "clarificationQuestion": {
+      "type": "string",
+      "maxLength": 300
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connection and live read-only Devnet balance; Devnet wallet security inspection and a deterministic heuristic risk assessment; the Express health endpoint and request/error handling; an unmounted AI rate limiter; Ajv schema validation; shared intent validation; and tests for these boundaries. AI interpretation, transaction construction, and signing are not implemented.
+This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connection and live read-only Devnet balance; Devnet wallet security inspection and deterministic heuristic risk assessment; and a rate-limited, server-side Gemini interpretation API with deterministic fallback and validation. Transaction construction, simulation, and signing are not implemented.
 
 The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data.
 
@@ -69,22 +69,21 @@ This is a logical layer, not a second copy of business logic. Shared schemas def
 ## Data flow and trust boundaries
 
 1. The browser sends the user's text to `POST /api/ai/interpret`.
-2. The backend validates request size and shape, applies rate limiting, and calls the Gemini service using a server-side credential.
-3. Gemini's response is treated as untrusted text/data. The intent parser decodes it; the deterministic intent validator rejects unsupported, malformed, ambiguous, or out-of-range values and converts decimal SOL values to integer lamports.
-4. The backend returns a normalized intent proposal. It does not construct or sign a transaction.
-5. The frontend displays the proposed intent and obtains user review. The browser-side Solana integration inspects recipients and creates a preview using Devnet RPC; security assessment explains available evidence.
-6. The user reviews the exact instructions and explicitly invokes Phantom. Phantom displays the signing request and remains the authorization boundary.
+2. The backend validates request size and shape, applies rate limiting, and calls Gemini using a server-side credential; if unavailable, it may use the constrained deterministic fallback.
+3. Gemini's response is treated as untrusted data. The closed candidate schema and deterministic validator reject unsupported, malformed, ambiguous, ungrounded, or out-of-range values and convert decimal SOL values to integer lamports.
+4. The backend returns either a normalized proposal or a clarification/unsupported status. It does not construct or sign a transaction.
+5. The frontend displays the proposed intent and allows the user to request read-only security inspections of each recipient through Devnet RPC. Transaction preview construction is not yet implemented.
+6. Transaction construction and explicit Phantom authorization remain future work; Gemini cannot initiate either capability.
 7. Submission and confirmation results come from actual RPC/wallet outcomes. The frontend displays only observed results and a Devnet Explorer link.
 
 ## Module responsibilities and interfaces
 
-These are architectural contracts, not implementations. Use dependency injection for network, clock, and Gemini client boundaries when implementation begins; do not add abstraction layers without a concrete testing or security need.
+The interfaces below describe current and planned module boundaries. Use dependency injection for external network and Gemini boundaries; do not add abstraction layers without a concrete testing or security need.
 
 | Module | Responsibility | Intended interface |
 |---|---|---|
-| Gemini service | Server-side Gemini transport, model/configuration handling, bounded request/response, provider error normalization. No transaction imports. | `interpretPrompt({ prompt, model }) -> Promise<unknown>`; returns untrusted provider output. |
-| Intent parser | Decode Gemini's response into the expected candidate shape; no trust implied. | `parseCandidate(providerOutput) -> IntentCandidate` or typed parse error. |
-| Intent validator (`shared/validation/`) | Strict shape/semantic validation, reject ambiguous/unsupported intent, validate addresses and bounds, convert decimal SOL to canonical lamports. | `validateCandidate(candidate) -> TransactionIntent` or validation issues. |
+| Gemini service (`backend/src/services/gemini/`) | Server-only Gemini 2.5 Flash transport, bounded request/response, schema-constrained output, and a disclosed deterministic fallback. No transaction imports. | `interpretNaturalLanguage(prompt) -> InterpretationResult`; returns only a validated proposal or clarification. |
+| Intent parser/validator (`backend/src/validators/`) | Parse the closed interpretation candidate, require addresses and explicit amounts to be present in the prompt, enforce equal split and total arithmetic, validate addresses and bounds, convert decimal SOL to canonical lamports. | `validateIntentCandidate(candidate) -> TransactionIntent` or validation issues. |
 | Solana connection manager | Create/reuse a read/write RPC connection explicitly configured for Devnet; fail closed for other clusters. | `getDevnetConnection() -> Connection`; no implicit Mainnet fallback. |
 | Phantom wallet manager | Browser-only provider discovery, connect/disconnect, public-key/network checks, and wallet authorization request. Never handles key export or seed phrases. | `connect()`, `disconnect()`, `getPublicKey()`, and `requestAuthorization(unsignedTransaction, { userGesture })`. |
 | Wallet inspection service (`blockchain/src/inspection/`) | Concurrently query Devnet balance, account info, and up to 20 recent signatures; normalize account types and partial failures. | `inspectWalletSecurity(address) -> WalletSecurityReport` with observed RPC facts separate from score interpretation. |
@@ -98,7 +97,7 @@ These are architectural contracts, not implementations. Use dependency injection
 ### Non-bypassable capability boundary
 
 - The Gemini service and intent parser return proposal data only; they cannot import Phantom, the transaction builder, or the execution service.
-- The backend interpret route returns `TransactionIntent` only; no serialized transaction or sign/execute command is part of that response.
+- The backend interpret route returns a normalized intent proposal or clarification; no serialized transaction or sign/execute command is part of that response.
 - Only the browser's explicit user action can trigger Phantom authorization.
 - Transaction construction consumes validated intent; risk assessment cannot add, remove, or rewrite recipients or amounts.
 - A simulation result is informative, not authorization or a guarantee of success.
@@ -161,9 +160,9 @@ tests/
 - **Unit (`tests/unit/`):** Pure parser, amount-to-lamports conversion, total calculation, memo formatting, and transaction boundary helpers. Deterministic clock/RPC/provider inputs are injected.
 - **Validation (`tests/validation/`):** Missing/extra fields, malformed Base58 keys, ambiguous Gemini outputs, zero/negative/overprecision/overflow amounts, unsupported networks, duplicate recipients where disallowed, and oversized instructions. Assert rejection rather than normalization into a different transaction.
 - **Risk scoring:** Table-driven tests map observed evidence to documented indicators. Test absent/partial RPC data and ensure no score implies guaranteed safety.
-- **Backend API (`tests/backend/`):** Exercise status, request schema, size/rate limits, Gemini timeouts/provider failures, malformed model output, safe error envelopes, and absence of provider credentials in responses. Mock only the Gemini transport boundary, not a fake successful product response.
+- **Backend API (`tests/backend/`):** Exercise status, request schema, size/rate limits, malformed model output, safe error envelopes, and absence of provider credentials in responses. Unit-test grounded Gemini proposals and fallback behavior by mocking only the provider transport boundary.
 - **Blockchain integration (`tests/blockchain/`):** Unit-test instruction composition without sending. For integration, use Solana Devnet or a local test validator when one is deliberately introduced; use generated test keypairs and valueless test accounts only. No Mainnet and no real funds. Test simulation failure, RPC unavailable, wallet rejection, confirmation failure, and atomic multi-recipient instruction shape.
 - **Fixtures (`tests/fixtures/`):** Store clearly labeled deterministic test inputs/recorded responses; never label fixture results as live chain data or ship them to the product UI.
-- **Current foundation checks:** `npm test` uses the built-in Node test runner to exercise health/error handling, rate limiting, schema validation, intent semantic validation, and all seven JSON Schema contracts. No integration service is started by this test.
+- **Current foundation checks:** `npm test` uses the built-in Node test runner to exercise health/error handling, interpretation route validation, rate limiting, schema validation, exact candidate validation, grounded fallback behavior, intent semantics, and all eight JSON Schema contracts. No integration service is started by this test.
 
 Blockchain integration tests must not require real funds. Any future Devnet test should use disposable test accounts and request only testnet tokens; ordinary test runs remain offline.

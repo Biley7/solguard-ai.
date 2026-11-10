@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
+import { createAiRouter } from './routes/ai.js';
 
-export function createApp() {
+export function createApp({ interpretIntent } = {}) {
   const app = express();
   const trustedProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
 
@@ -19,11 +20,13 @@ export function createApp() {
     next();
   });
 
-  app.use(express.json({ limit: '2kb', strict: true }));
+  app.use(express.json({ limit: '8kb', strict: true }));
 
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok' });
   });
+
+  app.use('/api/ai', createAiRouter({ interpret: interpretIntent }));
 
   app.use((_request, response) => {
     response.status(404).json({

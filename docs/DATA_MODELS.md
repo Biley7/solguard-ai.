@@ -2,7 +2,7 @@
 
 ## Source of truth
 
-The seven machine-readable contracts (including the internal `IntentCandidate` contract) are JSON Schema Draft 2020-12 files under [`shared/schemas/`](../shared/schemas/). All objects reject additional properties. This reduces accidental field drift and makes model/API boundaries explicit. Canonical semantic rules and exact amount conversion belong in `shared/validation/` so backend and transaction boundaries do not duplicate them.
+The machine-readable contracts (including the internal `IntentCandidate` and `InterpretationCandidate` contracts) are JSON Schema Draft 2020-12 files under [`shared/schemas/`](../shared/schemas/). All objects reject additional properties. This reduces accidental field drift and makes model/API boundaries explicit. Canonical semantic rules and exact amount conversion belong in `shared/validation/` so backend and transaction boundaries do not duplicate them.
 
 The backend currently validates schema shape at runtime with Ajv 2020 and applies canonical address, exact SOL-to-lamports, positive amount, and u64 aggregate checks in the shared validation module. Schema validation is not a substitute for semantic validation at every applicable trust boundary.
 
@@ -45,6 +45,14 @@ Schema: `shared/schemas/TransactionIntent.schema.json`.
 ```
 
 This is normalized intent, not an executable transaction. It contains no payer, transaction bytes, signature, memo, or authorization. The recipient list contains one recipient for a single transfer or 2–5 recipients for an atomic batch, with five as the schema maximum. Transaction size and total bounds remain semantic rules. If user intent is ambiguous, no `TransactionIntent` is returned.
+
+## `InterpretationCandidate`
+
+Schema: `shared/schemas/InterpretationCandidate.schema.json`.
+
+This is the closed, untrusted Gemini response shape. It includes a status (`ready`, `clarification`, or `unsupported`), distribution mode, decimal SOL strings, explicit recipient addresses, optional memo text, explanation, and clarification details. A candidate is not an API intent and is not accepted solely because it conforms to this schema. The backend additionally requires exact prompt grounding for every recipient address and explicit amount, validates all amounts as positive integer lamports, verifies requested totals and equal splits, and rejects model-added memo text.
+
+`POST /api/ai/interpret` returns a `TransactionIntent` only when these deterministic checks pass. Otherwise `intent` is `null`, and the response asks for clarification or identifies an unsupported request. `source` states whether Gemini or the constrained deterministic fallback produced the response.
 
 ## `RiskAssessment`
 

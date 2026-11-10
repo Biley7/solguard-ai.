@@ -35,11 +35,11 @@ export function dashboardPage() {
         ${copilotComposer({ compact: true })}
         <div class="intent-preview" id="intent-preview">
           <div class="intent-preview-heading">
-            <span class="preview-symbol">${icon('shield')}</span>
-            <div><strong>Intent preview</strong><small>Nothing has been interpreted or sent.</small></div>
-            <span class="tag tag--muted">NOT READY</span>
+          <span class="preview-symbol">${icon('shield')}</span>
+          <div><strong>Intent preview</strong><small>Nothing has been interpreted or sent.</small></div>
+          <span class="tag tag--muted">NOT READY</span>
           </div>
-          <div class="intent-preview-body">${emptyState('No intent to review', 'Enter a command above. AI interpretation is not connected in this phase.', 'info')}</div>
+          <div class="intent-preview-body" id="intent-preview-body">${emptyState('No intent to review', 'Enter a command above to request a validated, review-only interpretation.', 'info')}</div>
         </div>
       </section>
 

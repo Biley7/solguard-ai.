@@ -9,6 +9,11 @@ import { createPhantomWallet, PhantomWalletError } from './services/wallet/phant
 import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
 import { inspectWalletSecurity, WalletInspectionError } from '../../blockchain/src/inspection/wallet-security.js';
 import { walletInspectionError, walletInspectionView } from './components/wallet-inspection.js';
+import {
+  intentProcessingView,
+  intentRequestErrorView,
+  intentResultView,
+} from './components/intent-result.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -22,6 +27,7 @@ const views = {
 const phantomWallet = createPhantomWallet();
 let walletState = { status: 'disconnected', address: null };
 let balanceState = { status: 'idle', sol: null, observedAt: null };
+let currentIntentResponse = null;
 let toastTimer;
 
 function shortenAddress(address) {
@@ -95,7 +101,7 @@ function renderWalletStatus() {
   }
   if (dataNotice) {
     dataNotice.innerHTML = connected
-      ? `<strong>Read-only wallet connected.</strong> Public key and balance are queried from the fixed Solana Devnet RPC. Transaction history, risk analysis, and transaction signing are not implemented.`
+      ? `<strong>Read-only wallet connected.</strong> Public key and balance are queried from fixed Solana Devnet RPC. Transaction history and transaction signing are not implemented.`
       : `<strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.`;
   }
 
@@ -192,34 +198,133 @@ function setFeedback(form, message, tone = 'warning') {
   feedback.className = `form-feedback is-visible form-feedback--${tone}`;
 }
 
-function handleCopilotSubmit(form) {
+function renderCopilotResponse(response) {
+  currentIntentResponse = response.status === 'ready' ? response : null;
+  const result = intentResultView(response);
+  const previewBody = document.querySelector('#intent-preview-body');
+  if (previewBody) {
+    previewBody.innerHTML = result;
+    const meta = document.querySelector('#intent-preview .intent-preview-heading small');
+    const status = document.querySelector('#intent-preview .intent-preview-heading .tag');
+    if (meta) meta.textContent = response.status === 'ready' ? 'Validated intent · review required' : 'No transfer is ready';
+    if (status) {
+      status.textContent = response.status === 'ready' ? 'REVIEW' : response.status.toUpperCase();
+      status.className = response.status === 'ready' ? 'tag tag--outline' : 'tag tag--muted';
+    }
+  }
+  const state = document.querySelector('[data-intent-state]');
+  if (state) state.innerHTML = result;
+}
+
+function renderCopilotProcessing() {
+  currentIntentResponse = null;
+  const previewBody = document.querySelector('#intent-preview-body');
+  if (previewBody) previewBody.innerHTML = intentProcessingView();
+  const previewMeta = document.querySelector('#intent-preview .intent-preview-heading small');
+  const previewStatus = document.querySelector('#intent-preview .intent-preview-heading .tag');
+  if (previewMeta) previewMeta.textContent = 'Checking request details';
+  if (previewStatus) {
+    previewStatus.textContent = 'PROCESSING';
+    previewStatus.className = 'tag tag--muted';
+  }
+  const state = document.querySelector('[data-intent-state]');
+  if (state) state.innerHTML = intentProcessingView();
+}
+
+async function handleCopilotSubmit(form) {
   const prompt = form.elements.prompt.value.trim();
   if (!prompt) {
     setFeedback(form, 'Enter a request before continuing.');
     return;
   }
 
-  setFeedback(form, 'Request not sent. AI interpretation is not implemented in this phase.', 'info');
-  const preview = document.querySelector('#intent-preview');
-  if (preview) {
-    preview.innerHTML = `
-      <div class="intent-preview-heading">
-        <span class="preview-symbol">${icon('info')}</span>
-        <div><strong>Intent preview unavailable</strong><small>Your text was not sent or interpreted.</small></div>
-        <span class="tag tag--muted">NOT SENT</span>
-      </div>
-      <div class="intent-unavailable-copy">Gemini integration is not implemented. No recipient or amount has been extracted.</div>`;
+  const submitButton = form.querySelector('[type="submit"]');
+  const originalButton = submitButton?.innerHTML;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.setAttribute('aria-busy', 'true');
+    submitButton.textContent = 'Interpreting…';
+  }
+  renderCopilotProcessing();
+  const feedback = form.querySelector('[data-feedback]');
+  if (feedback) {
+    feedback.textContent = '';
+    feedback.className = 'form-feedback';
   }
 
-  const state = document.querySelector('[data-intent-state]');
-  if (state) {
-    state.innerHTML = `
-      <div class="intent-result-state">
-        <span class="result-state-icon">${icon('info')}</span>
-        <strong>Request not sent</strong>
-        <p>AI interpretation is not available in this phase. No structured intent was created.</p>
-      </div>`;
+  try {
+    const response = await fetch('/api/ai/interpret', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      const message = payload.error?.message || 'The interpretation request was rejected.';
+      currentIntentResponse = null;
+      const errorView = intentRequestErrorView(message);
+      const previewBody = document.querySelector('#intent-preview-body');
+      if (previewBody) previewBody.innerHTML = errorView;
+      const state = document.querySelector('[data-intent-state]');
+      if (state) state.innerHTML = errorView;
+      setFeedback(form, message, 'warning');
+      return;
+    }
+    renderCopilotResponse(payload);
+    if (payload.status !== 'ready') {
+      setFeedback(form, payload.clarificationQuestion || payload.explanation, 'info');
+    }
+  } catch {
+    currentIntentResponse = null;
+    const message = 'Could not reach the SolGuard interpretation service. Confirm the backend is running and try again.';
+    const errorView = intentRequestErrorView(message);
+    const previewBody = document.querySelector('#intent-preview-body');
+    if (previewBody) previewBody.innerHTML = errorView;
+    const state = document.querySelector('[data-intent-state]');
+    if (state) state.innerHTML = errorView;
+    setFeedback(form, message, 'warning');
+  } finally {
+    if (submitButton && originalButton !== undefined) {
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
+      submitButton.innerHTML = originalButton;
+    }
   }
+}
+
+async function scanIntentRecipients(button) {
+  const intent = currentIntentResponse?.intent;
+  const target = button.closest('.intent-result')?.querySelector('#intent-security-results');
+  if (!intent || !target) return;
+
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  target.innerHTML = '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Scanning recipients</strong><span>Read-only checks against Solana Devnet RPC.</span></div>';
+  const results = [];
+
+  for (const [index, recipient] of intent.recipients.entries()) {
+    try {
+      const report = await inspectWalletSecurity(recipient.address);
+      results.push(`
+        <section class="intent-recipient-scan">
+          <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
+          ${walletInspectionView(report, { compact: true })}
+        </section>`);
+    } catch (error) {
+      const message = error instanceof WalletInspectionError
+        ? error.message
+        : 'Devnet inspection could not be completed.';
+      results.push(`
+        <section class="intent-recipient-scan">
+          <h3>Recipient ${index + 1}</h3>
+          ${walletInspectionError(message)}
+        </section>`);
+    }
+  }
+
+  target.innerHTML = results.join('');
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
 }
 
 async function handleAddressSubmit(form) {
@@ -317,7 +422,10 @@ function onClick(event) {
   }
 
   const action = event.target.closest('[data-action]')?.dataset.action;
-  if (action === 'connect-wallet') {
+  if (action === 'scan-intent-recipients') {
+    const button = event.target.closest('[data-action="scan-intent-recipients"]');
+    if (button) void scanIntentRecipients(button);
+  } else if (action === 'connect-wallet') {
     if (walletState.status === 'connected') {
       showToast('Phantom is connected. Use Disconnect to end the wallet session.');
     } else {
@@ -344,7 +452,7 @@ function onSubmit(event) {
   event.preventDefault();
 
   if (form.dataset.form === 'copilot') {
-    handleCopilotSubmit(form);
+    void handleCopilotSubmit(form);
   } else if (form.dataset.form === 'scanner' || form.dataset.form === 'xray' || form.dataset.form === 'dashboard-scan') {
     void handleAddressSubmit(form);
   }

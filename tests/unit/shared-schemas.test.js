@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const schemaDirectory = new URL('../../shared/schemas/', import.meta.url);
 const schemaNames = [
+  'InterpretationCandidate',
   'IntentCandidate',
   'Recipient',
   'TransactionIntent',
@@ -46,6 +47,19 @@ test('AI candidate amounts are decimal strings, never JSON numbers', async () =>
 
   assert.equal(amountSchema.type, 'string');
   assert.equal(amountSchema.pattern, '^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,9})?$');
+});
+
+test('interpretation candidates allow clarification while keeping output closed', async () => {
+  const source = await readFile(
+    new URL('InterpretationCandidate.schema.json', schemaDirectory),
+    'utf8',
+  );
+  const schema = JSON.parse(source);
+
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.properties.status.enum, ['ready', 'clarification', 'unsupported']);
+  assert.equal(schema.properties.recipients.maxItems, 5);
+  assert.equal(schema.properties.recipients.items.properties.amountSol.type, 'string');
 });
 
 test('transaction intent and preview cap batches at five recipients', async () => {

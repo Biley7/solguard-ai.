@@ -10,9 +10,9 @@ export function copilotComposer({ compact = false } = {}) {
   return `
     <form class="copilot-form ${compact ? 'copilot-form--compact' : ''}" data-form="copilot">
       <label class="sr-only" for="copilot-prompt">Describe the transfer or wallet question</label>
-      <textarea id="copilot-prompt" name="prompt" rows="${compact ? '3' : '5'}" maxlength="2000" placeholder="Describe what you want to do in plain language…" required></textarea>
+      <textarea id="copilot-prompt" name="prompt" rows="${compact ? '3' : '5'}" maxlength="1800" placeholder="Describe what you want to do in plain language…" required></textarea>
       <div class="composer-footer">
-        <span class="composer-hint">${icon('lock')} Your prompt stays in this browser in this preview.</span>
+        <span class="composer-hint">${icon('lock')} Sent to SolGuard for interpretation; never enter wallet secrets.</span>
         <button class="button button--primary" type="submit"><span>Review intent</span>${icon('arrow')}</button>
       </div>
       <div class="form-feedback" data-feedback="copilot" role="status" aria-live="polite"></div>

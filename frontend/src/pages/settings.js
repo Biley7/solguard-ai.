@@ -6,7 +6,7 @@ export function settingsPage() {
     ${pageHeading('PREFERENCES & CONNECTIONS', 'Settings', 'Review the environment and integration status for this preview.')}
     <section class="notice notice--warning">
       <span class="notice-icon">${icon('info')}</span>
-      <p><strong>Wallet access is read-only in this phase.</strong> Phantom can provide your public key; the app reads SOL balance from the fixed Devnet RPC. Transactions and AI requests are not implemented.</p>
+      <p><strong>Wallet access is read-only in this phase.</strong> Phantom can provide your public key; the app reads SOL balance from fixed Devnet RPC. AI interpretation is available through the server-side API; transaction construction and signing are not implemented.</p>
     </section>
     <div class="settings-grid">
       <section class="panel settings-panel">
@@ -22,7 +22,7 @@ export function settingsPage() {
         ${panelHeader('Connected services', 'INTEGRATION STATUS')}
         <ul class="integration-list">
           <li><span class="integration-icon">${icon('shield')}</span><span><strong>Phantom Wallet</strong><small>Public address only; no signing in this phase</small></span><span class="tag tag--muted" id="settings-wallet-status">NOT CONNECTED</span></li>
-          <li><span class="integration-icon">${icon('spark')}</span><span><strong>Gemini AI</strong><small>Server-side intent interpretation</small></span><span class="tag tag--muted">NOT CONFIGURED</span></li>
+          <li><span class="integration-icon">${icon('spark')}</span><span><strong>Gemini AI</strong><small>Server-side interpretation; deterministic fallback if unavailable</small></span><span class="tag tag--muted">SERVER ONLY</span></li>
           <li><span class="integration-icon">${icon('grid')}</span><span><strong>Solana RPC</strong><small>Read-only Devnet balance queries</small></span><span class="tag tag--muted" id="settings-rpc-status">NOT CHECKED</span></li>
         </ul>
       </section>
