@@ -108,3 +108,42 @@ test('disconnect invokes only Phantom disconnect and clears the connection state
   assert.deepEqual(await wallet.disconnect(), { status: 'disconnected', address: null });
   assert.equal(disconnectCalls, 1);
 });
+
+test('signs only when explicitly requested and bound to the currently connected account', async () => {
+  let signedTransaction;
+  const provider = createProvider({
+    signTransaction: async (transaction) => {
+      signedTransaction = transaction;
+      return transaction;
+    },
+  });
+  const wallet = createPhantomWallet({ providerLookup: () => provider });
+  await wallet.connect();
+
+  const transaction = { message: 'unsigned transaction' };
+  assert.equal(await wallet.signTransaction(transaction, firstAddress), transaction);
+  assert.equal(signedTransaction, transaction);
+  await assert.rejects(wallet.signTransaction(transaction, secondAddress), {
+    code: 'ACCOUNT_CHANGED',
+  });
+});
+
+test('reports Phantom signing rejection and missing signing capability', async () => {
+  const rejectingWallet = createPhantomWallet({
+    providerLookup: () => createProvider({
+      signTransaction: async () => {
+        throw Object.assign(new Error('User rejected the request'), { code: 4001 });
+      },
+    }),
+  });
+  await rejectingWallet.connect();
+  await assert.rejects(rejectingWallet.signTransaction({}, firstAddress), {
+    code: 'USER_REJECTED',
+  });
+
+  const unsupportedWallet = createPhantomWallet({ providerLookup: () => createProvider() });
+  await unsupportedWallet.connect();
+  await assert.rejects(unsupportedWallet.signTransaction({}, firstAddress), {
+    code: 'SIGNING_UNAVAILABLE',
+  });
+});

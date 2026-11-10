@@ -16,7 +16,7 @@ This indicates only that the Express process can answer requests; it does not re
 
 ## `POST /api/ai/interpret`
 
-Interpret a user-authored SOL transfer request into a validated review-only proposal. The endpoint does not construct, simulate, sign, or submit a transaction.
+Interpret a user-authored SOL transfer request into a validated review-only proposal. The endpoint does not construct, simulate, sign, or submit a transaction; those steps remain exclusively in the browser's Devnet workflow after the user proceeds.
 
 ### Request
 

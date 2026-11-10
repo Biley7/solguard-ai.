@@ -18,7 +18,7 @@ export function dashboardPage() {
 
     <section class="notice notice--info" id="dashboard-data-notice" aria-label="Data availability notice">
       <span class="notice-icon">${icon('info')}</span>
-      <p><strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.</p>
+      <p><strong>Devnet-only workspace.</strong> Connect Phantom to load your live wallet address and balance. Recipient inspection and session transaction activity use observed Devnet data only.</p>
     </section>
 
     <section class="metric-grid" aria-label="Wallet overview">
@@ -58,7 +58,7 @@ export function dashboardPage() {
 
       <section class="panel transaction-panel">
         ${panelHeader('Transaction Preview', 'REQUIRES REVIEW')}
-        <div class="preview-callout"><span class="status-dot status-dot--amber"></span><span>Waiting for a validated transfer intent</span></div>
+        <div class="preview-callout"><span class="status-dot status-dot--amber"></span><span>Prepare a transaction in AI Copilot</span></div>
         <dl class="data-list data-list--transaction">
           ${fieldRow('Sender', unavailableValue('Wallet not connected'), 'mono')}
           ${fieldRow('Recipient(s)', unavailableValue('No intent'))}
@@ -66,12 +66,10 @@ export function dashboardPage() {
           ${fieldRow('Network', '<span class="network-value">Solana Devnet <span class="tag tag--outline">TARGET</span></span>')}
           ${fieldRow('Estimated fee', unavailableValue('Not available'))}
           ${fieldRow('Security review', unavailableValue('Not assessed'))}
-          ${fieldRow('Memo', unavailableValue('Not selected'))}
+          ${fieldRow('Memo', unavailableValue('Generated after recipient assessment'))}
         </dl>
-        <button type="button" class="button button--primary button--wide" data-action="authorize">
-          <span>Review and authorize</span>${icon('arrow')}
-        </button>
-        <p class="subtle-note">No transaction can be signed in this preview.</p>
+        <div class="panel-bottom-action">${button('Open AI Copilot', { view: 'copilot', kind: 'primary', iconName: 'arrow', className: 'button--wide' })}</div>
+        <p class="subtle-note">Every transfer is simulated and reviewed before Phantom is asked for approval.</p>
       </section>
 
       <section class="panel activity-panel">

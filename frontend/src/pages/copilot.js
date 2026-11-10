@@ -23,7 +23,7 @@ export function copilotPage() {
         </div>
         <div class="intent-safety-note">
           <span class="note-mark">${icon('shield')}</span>
-          <p><strong>Human authorization stays in control.</strong><br />An AI suggestion is not a transaction. Any future transaction must be validated and explicitly approved in Phantom.</p>
+          <p><strong>Human authorization stays in control.</strong><br />An AI suggestion is not a transaction. Every transfer is deterministically validated and requires explicit Phantom approval.</p>
         </div>
       </aside>
     </div>`;

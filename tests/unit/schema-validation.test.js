@@ -32,6 +32,7 @@ test('transaction results require status-consistent signatures and confirmation 
     confirmationStatus: 'finalized',
     explorerUrl: 'https://explorer.solana.com/tx/test-signature?cluster=devnet',
     errorCode: null,
+    memoVerification: 'verified',
   };
   const rejected = {
     status: 'rejected',
@@ -39,6 +40,7 @@ test('transaction results require status-consistent signatures and confirmation 
     confirmationStatus: null,
     explorerUrl: null,
     errorCode: 'USER_REJECTED',
+    memoVerification: 'unavailable',
   };
 
   assert.equal(validateSchema('TransactionResult', confirmed).valid, true);

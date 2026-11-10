@@ -153,6 +153,39 @@ export function createPhantomWallet({ providerLookup = getPhantomProvider } = {}
     }
   }
 
+  async function signTransaction(transaction, expectedPayerAddress) {
+    const wallet = getAvailableProvider();
+    if (!connectedAddress || connectedAddress !== expectedPayerAddress) {
+      throw new PhantomWalletError(
+        'ACCOUNT_CHANGED',
+        'The connected Phantom account changed. Rebuild and review the transaction before signing.',
+      );
+    }
+    if (typeof wallet.signTransaction !== 'function') {
+      throw new PhantomWalletError(
+        'SIGNING_UNAVAILABLE',
+        'This Phantom provider does not support signing this transaction.',
+      );
+    }
+
+    try {
+      const currentAddress = normalizePublicKey(wallet.publicKey);
+      if (currentAddress !== expectedPayerAddress) {
+        throw new PhantomWalletError(
+          'ACCOUNT_CHANGED',
+          'The connected Phantom account changed. Rebuild and review the transaction before signing.',
+        );
+      }
+      return await wallet.signTransaction(transaction);
+    } catch (error) {
+      if (error instanceof PhantomWalletError) throw error;
+      if (isRejected(error)) {
+        throw new PhantomWalletError('USER_REJECTED', 'The Phantom signing request was rejected.', error);
+      }
+      throw new PhantomWalletError('SIGNING_FAILED', 'Phantom could not sign the transaction.', error);
+    }
+  }
+
   function subscribe(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -162,6 +195,7 @@ export function createPhantomWallet({ providerLookup = getPhantomProvider } = {}
     connect,
     disconnect,
     restore,
+    signTransaction,
     subscribe,
     isInstalled: () => Boolean(providerLookup()),
   };

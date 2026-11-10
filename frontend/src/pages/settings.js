@@ -6,7 +6,7 @@ export function settingsPage() {
     ${pageHeading('PREFERENCES & CONNECTIONS', 'Settings', 'Review the environment and integration status for this preview.')}
     <section class="notice notice--warning">
       <span class="notice-icon">${icon('info')}</span>
-      <p><strong>Wallet access is read-only in this phase.</strong> Phantom can provide your public key; the app reads SOL balance from fixed Devnet RPC. AI interpretation is available through the server-side API; transaction construction and signing are not implemented.</p>
+      <p><strong>SolGuard is Devnet-only.</strong> Phantom provides the public key and signs only after the user reviews and explicitly approves a simulated SOL transfer. SolGuard submits signed bytes through its fixed Devnet RPC.</p>
     </section>
     <div class="settings-grid">
       <section class="panel settings-panel">
@@ -16,14 +16,14 @@ export function settingsPage() {
           ${fieldRow('RPC endpoint', '<span class="mono">api.devnet.solana.com</span>')}
           ${fieldRow('Mainnet access', '<span class="state-denied">Disabled</span>')}
         </dl>
-        <p class="panel-description">The Devnet indicator describes SolGuard RPC reads. Phantom does not expose a dependable selected-cluster value through this connection interface. Since transactions are not implemented, SolGuard cannot send anything to a different cluster.</p>
+        <p class="panel-description">SolGuard submits only through its hard-coded Devnet RPC endpoint; it does not rely on Phantom's selected cluster for transaction submission. No Mainnet endpoint or switch is present.</p>
       </section>
       <section class="panel settings-panel">
         ${panelHeader('Connected services', 'INTEGRATION STATUS')}
         <ul class="integration-list">
-          <li><span class="integration-icon">${icon('shield')}</span><span><strong>Phantom Wallet</strong><small>Public address only; no signing in this phase</small></span><span class="tag tag--muted" id="settings-wallet-status">NOT CONNECTED</span></li>
+          <li><span class="integration-icon">${icon('shield')}</span><span><strong>Phantom Wallet</strong><small>Public address; signs only after explicit transfer review</small></span><span class="tag tag--muted" id="settings-wallet-status">NOT CONNECTED</span></li>
           <li><span class="integration-icon">${icon('spark')}</span><span><strong>Gemini AI</strong><small>Server-side interpretation; deterministic fallback if unavailable</small></span><span class="tag tag--muted">SERVER ONLY</span></li>
-          <li><span class="integration-icon">${icon('grid')}</span><span><strong>Solana RPC</strong><small>Read-only Devnet balance queries</small></span><span class="tag tag--muted" id="settings-rpc-status">NOT CHECKED</span></li>
+          <li><span class="integration-icon">${icon('grid')}</span><span><strong>Solana RPC</strong><small>Fixed Devnet inspection, simulation, and submission</small></span><span class="tag tag--muted" id="settings-rpc-status">NOT CHECKED</span></li>
         </ul>
       </section>
       <section class="panel settings-panel settings-security">

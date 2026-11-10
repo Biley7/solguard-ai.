@@ -145,26 +145,28 @@ Schema: `shared/schemas/TransactionResult.schema.json`.
 
 ```json
 {
-  "status": "submitted",
+  "status": "rejected",
   "signature": null,
   "confirmationStatus": null,
   "explorerUrl": null,
-  "errorCode": null
+  "errorCode": "USER_REJECTED",
+  "memoVerification": "unavailable"
 }
 ```
 
-This snippet is illustrative shape only, not a successful chain result. Runtime semantics:
+This example describes a user rejection and does not represent a chain submission. Runtime semantics:
 
 - `submitted` requires an actual returned signature; confirmation may be pending.
 - `confirmed` requires an actual confirmed/finalized RPC result and a signature.
 - `failed` requires observed submission/confirmation failure; retain a signature only if one actually exists.
 - `rejected` represents user/wallet rejection before successful submission and must not imply a signature.
 - Explorer URLs must identify Devnet and derive from the actual signature.
+- `memoVerification` is `verified` only when Devnet returns a parsed memo instruction whose text exactly matches the prepared memo; it is `not_verified` when an observed memo is absent or mismatched and `unavailable` when RPC cannot establish the result. It does not override the transaction confirmation status.
 
 ## Cross-model invariants
 
 - No model from Gemini may be used directly as `TransactionPreview` or `TransactionResult`.
 - A preview is built from validated intent and an explicit payer, then reviewed before Phantom is invoked.
-- The transaction's instruction recipients/amounts and optional memo must exactly match the displayed preview.
+- The transaction's instruction recipients/amounts and generated audit memo must exactly match the displayed preview.
 - The result is produced from actual wallet/RPC outcomes only.
 - Schema validation is necessary but not sufficient: canonical address checks, integer range, total equality, cluster checks, and status/signature relationships require semantic validation.

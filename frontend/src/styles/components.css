@@ -486,6 +486,156 @@
   justify-self: start;
 }
 
+.transaction-confirmation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #435346;
+  border-radius: 5px;
+  background: #18221d;
+}
+
+.transaction-confirmation-header,
+.transaction-confirmation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transaction-confirmation-header h3 {
+  margin: 3px 0 0;
+  color: #e2ebe5;
+  font-size: 13px;
+}
+
+.transaction-review-list {
+  display: grid;
+  margin: 0;
+}
+
+.transaction-review-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-top: 1px solid #2a3830;
+}
+
+.transaction-review-list dt {
+  flex: 0 0 auto;
+  color: #92a198;
+  font-size: 10px;
+}
+
+.transaction-review-list dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #d3ded7;
+  font-size: 10px;
+  text-align: right;
+}
+
+.transaction-review-list a {
+  color: #9fdbba;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.transaction-audit-memo {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #2d3a32;
+  border-radius: 4px;
+  background: #111a16;
+}
+
+.transaction-audit-memo > span,
+.transaction-audit-memo small {
+  color: #92a198;
+  font-size: 9px;
+}
+
+.transaction-audit-memo code,
+.transaction-execution-result code {
+  color: #c1d5c8;
+  font-family: var(--mono);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.transaction-risk-warning,
+.transaction-preparation-error {
+  padding: 11px;
+  border: 1px solid #6b3f36;
+  border-radius: 4px;
+  background: #281d1b;
+  color: #e9b4a9;
+}
+
+.transaction-risk-warning strong,
+.transaction-preparation-error strong {
+  font-size: 11px;
+}
+
+.transaction-risk-warning p,
+.transaction-preparation-error p {
+  margin: 5px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.transaction-risk-warning label {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  color: #eed0c8;
+  font-size: 10px;
+}
+
+.transaction-risk-warning input {
+  margin: 2px 0 0;
+  accent-color: var(--green-strong);
+}
+
+.transaction-execution-result {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #131c17;
+}
+
+.transaction-execution-result h3 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.transaction-execution-result--success h3 {
+  color: #83d6a9;
+}
+
+.transaction-execution-result--pending h3 {
+  color: #e0bf79;
+}
+
+.transaction-execution-result--error h3 {
+  color: #e49a91;
+}
+
+.transaction-execution-result .button {
+  justify-self: start;
+}
+
+.transaction-result-note {
+  margin: 0;
+  color: #d9c391;
+  font-size: 10px;
+}
+
 .intent-unavailable-copy {
   padding: 12px 14px;
   border-top: 1px solid #25322b;
@@ -590,8 +740,36 @@
   min-height: 156px;
 }
 
+.session-transaction-status {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #34463b;
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #b5c3ba;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.session-transaction-status--confirmed {
+  border-color: #2e6348;
+  color: #8bd1a6;
+}
+
+.session-transaction-status--failed,
+.session-transaction-status--rejected {
+  border-color: #69413c;
+  color: #e6a49c;
+}
+
+.session-transaction-status--pending,
+.session-transaction-status--submitted {
+  border-color: #78663b;
+  color: #e2c47c;
+}
+
 .table-wrap--compact .activity-table {
-  min-width: 620px;
+  min-width: 760px;
 }
 
 .table-wrap--compact .activity-table tbody .empty-state {

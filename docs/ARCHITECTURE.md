@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom public-key connection and live read-only Devnet balance; Devnet wallet security inspection and deterministic heuristic risk assessment; and a rate-limited, server-side Gemini interpretation API with deterministic fallback and validation. Transaction construction, simulation, and signing are not implemented.
+This document defines the intended architecture and module boundaries for the MVP. The current foundation includes a responsive frontend for the Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings; Phantom connection and live Devnet balance; Devnet wallet inspection and deterministic heuristic risk assessment; a rate-limited, server-side Gemini interpretation API with deterministic fallback; and explicit Phantom signing of simulated, atomic SOL transfers through the fixed Devnet RPC.
 
-The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data.
+The architecture follows the approved product requirements: Devnet only, deterministic validation of untrusted AI output, explicit Phantom authorization, and no fabricated chain data. Wallet X-Ray uses the same evidence-based Devnet inspection as the recipient scanner. The transaction history view stores only in-memory attempts from the current page session; it uses no database or browser storage.
 
 ## System context
 
@@ -17,7 +17,7 @@ flowchart LR
   Gemini[Gemini API]
   RPC[Solana Devnet RPC]
   Explorer[Solana Explorer Devnet]
-  Memo[Solana Memo Program]
+  MemoProgram[Solana Memo Program]
 
   User --> Browser
   Browser <-->|Explicit connect and transaction approval| Phantom
@@ -28,7 +28,7 @@ flowchart LR
   Browser -->|Read-only queries and simulation| RPC
   Browser -->|User-authorized signed transaction| RPC
   RPC -->|Submit transaction| Runtime[Solana Devnet Runtime]
-  Runtime -->|Executes included instruction| Memo[Memo Program]
+  Runtime -->|Executes included instruction| MemoProgram
   Browser -->|Signature link| Explorer
 ```
 
@@ -38,7 +38,7 @@ Gemini has no interface to Phantom, signing, transaction construction, simulatio
 
 ### A. Frontend presentation — `frontend/`
 
-Vanilla JavaScript ES modules, served and built by Vite. The current UI includes Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Transaction preview is integrated into the Command Center. Phantom is used only for public-key connection state; the frontend reads balances through the fixed Devnet connection and makes no signing request.
+Vanilla JavaScript ES modules, served and built by Vite. The current UI includes Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings screens. Transaction preview and explicit approval are integrated into the Copilot flow. Phantom provides public-key connection and signs only after the user reviews the prepared transaction.
 
 Frontend responsibilities:
 
@@ -56,7 +56,7 @@ The backend's interpret endpoint proposes intent only. It must not import or cal
 
 ### C. Blockchain integration — `blockchain/src/`
 
-Devnet-only RPC configuration, connection, read-only balance/account/signature inspection, and a deterministic metadata-only heuristic assessment are implemented. Transaction construction, simulation, and submission/confirmation remain future work. Transaction construction must use validated contracts and support either one recipient or an atomic batch of 2–5 recipients.
+Devnet-only RPC configuration, balance/account/signature inspection, deterministic heuristic assessment, transaction construction, simulation, and submission/confirmation are implemented. Transaction construction validates the intent and supports one to five recipients in one atomic transfer transaction.
 
 Phantom is a browser-injected provider; its manager belongs in `frontend/src/services/wallet/`, not in a Node-only backend package. Client-side transaction construction and wallet submission are orchestrated by frontend blockchain services against the blockchain boundaries. No server service can sign as the user.
 
@@ -72,8 +72,8 @@ This is a logical layer, not a second copy of business logic. Shared schemas def
 2. The backend validates request size and shape, applies rate limiting, and calls Gemini using a server-side credential; if unavailable, it may use the constrained deterministic fallback.
 3. Gemini's response is treated as untrusted data. The closed candidate schema and deterministic validator reject unsupported, malformed, ambiguous, ungrounded, or out-of-range values and convert decimal SOL values to integer lamports.
 4. The backend returns either a normalized proposal or a clarification/unsupported status. It does not construct or sign a transaction.
-5. The frontend displays the proposed intent and allows the user to request read-only security inspections of each recipient through Devnet RPC. Transaction preview construction is not yet implemented.
-6. Transaction construction and explicit Phantom authorization remain future work; Gemini cannot initiate either capability.
+5. The frontend displays the proposed intent, scans every recipient through Devnet RPC, validates account destinations, estimates fee and balance, then simulates the complete transaction before rendering the confirmation.
+6. Only after explicit user approval does Phantom sign the exact reviewed message. The browser verifies the message, submits signed bytes to fixed Devnet RPC, and reports observed confirmation/Explorer proof. Gemini cannot initiate these capabilities.
 7. Submission and confirmation results come from actual RPC/wallet outcomes. The frontend displays only observed results and a Devnet Explorer link.
 
 ## Module responsibilities and interfaces
@@ -85,62 +85,50 @@ The interfaces below describe current and planned module boundaries. Use depende
 | Gemini service (`backend/src/services/gemini/`) | Server-only Gemini 2.5 Flash transport, bounded request/response, schema-constrained output, and a disclosed deterministic fallback. No transaction imports. | `interpretNaturalLanguage(prompt) -> InterpretationResult`; returns only a validated proposal or clarification. |
 | Intent parser/validator (`backend/src/validators/`) | Parse the closed interpretation candidate, require addresses and explicit amounts to be present in the prompt, enforce equal split and total arithmetic, validate addresses and bounds, convert decimal SOL to canonical lamports. | `validateIntentCandidate(candidate) -> TransactionIntent` or validation issues. |
 | Solana connection manager | Create/reuse a read/write RPC connection explicitly configured for Devnet; fail closed for other clusters. | `getDevnetConnection() -> Connection`; no implicit Mainnet fallback. |
-| Phantom wallet manager | Browser-only provider discovery, connect/disconnect, public-key/network checks, and wallet authorization request. Never handles key export or seed phrases. | `connect()`, `disconnect()`, `getPublicKey()`, and `requestAuthorization(unsignedTransaction, { userGesture })`. |
+| Phantom wallet manager (`frontend/src/services/wallet/phantom-wallet.js`) | Browser-only provider discovery, connect/disconnect, public-key state, and account-bound signing on explicit call. Never handles key export or seed phrases. | `connect()`, `disconnect()`, and `signTransaction(transaction, expectedAddress)`; caller invokes signing only in a user approval flow. |
 | Wallet inspection service (`blockchain/src/inspection/`) | Concurrently query Devnet balance, account info, and up to 20 recent signatures; normalize account types and partial failures. | `inspectWalletSecurity(address) -> WalletSecurityReport` with observed RPC facts separate from score interpretation. |
 | Risk assessment engine (`blockchain/src/security/`) | Produce a deterministic 0–100 observed-risk heuristic, factors, missing information, and recommended action. Neutral metadata alone scores zero; failed/missing core RPC data is unknown. | `assessWalletRisk(observation) -> RiskAssessment`; no AI inputs or safety guarantees. |
-| Transaction builder | Build only supported SOL transfer and optional memo instructions from a validated intent and explicit payer/network. | `buildTransaction(intent, payer, memoChoice) -> TransactionPreview + unsigned transaction`; never signs. |
-| Transaction simulator | Simulate the unsigned transaction against Devnet and translate actual RPC response into preview status. | `simulate(unsignedTransaction) -> SimulationResult`; unavailable/error is not success. |
-| Transaction execution service | After explicit user action, orchestrate Phantom authorization/submission and observe RPC confirmation. No autonomous path. | `executeWithWallet(unsignedTransaction, userGesture) -> TransactionResult`; asks the Phantom manager to authorize. |
-| Memo builder | Deterministically validate/format an optional, user-reviewed public memo; reject sensitive/unnecessary content per product rules. | `buildMemo(explicitUserApprovedText) -> MemoInstructionData`. |
-| Wallet X-Ray service (`frontend/src/services/blockchain/wallet-xray/`) | Compose read-only address validation, RPC inspection, and heuristic assessment for arbitrary public addresses on Devnet. | `inspectAddress(address) -> WalletSecurityReport`; no transaction or signing capability. |
+| Transaction builder (`blockchain/src/transactions/transaction-builder.js`) | Validate strict Devnet intent, account destinations, exact lamports, current balance/fee; build all transfers and compact heuristic memo in one legacy transaction; simulate before review. | `prepareSolTransferTransaction({ intent, payerAddress, riskSummary }) -> { preview, transaction }`; never signs. |
+| Transaction risk summary (`blockchain/src/security/transaction-risk.js`) | Summarize every scanned recipient using the highest observed category/score; unavailable evidence blocks preparation, high/critical remains explicit. | `summarizeTransactionRisk(reports) -> TransactionRiskSummary`. |
+| Transaction execution service (`blockchain/src/transactions/transaction-executor.js`) | Recheck blockhash, balance, and simulation; request a Phantom signature after explicit UI action; verify message immutability; submit only to fixed Devnet RPC; report confirmation and attempt parsed on-chain memo verification. | `executePreparedTransfer(prepared, { signTransaction }) -> TransactionResult`; no automatic invocation. Memo verification may be unavailable independently of transaction confirmation. |
+| Audit memo builder (transaction builder) | Produce a short SolGuard-generated heuristic record without natural-language descriptions or wallet metadata. | `SOLGUARD_V1 | OBSERVED_RISK: <CATEGORY> <SCORE>/100 | HEURISTIC`; not an independent certification. |
+| Wallet X-Ray (`frontend/src/pages/xray.js`, `blockchain/src/inspection/wallet-security.js`) | Read-only arbitrary-address inspection: balance, account info, recent signatures, risk factors, missing information, and suggested precautions. Never infers complete history or identity. | `inspectWalletSecurity(address) -> WalletSecurityReport`; no transaction or signing capability. |
+| Session transaction history (`frontend/src/services/blockchain/session-transaction-history.js`) | Keep attempts initiated through the current application page in volatile memory and display only observed signatures/statuses. | `recordSessionTransaction(preview, riskSummary)` and `updateSessionTransaction(id, result)`; no local/session storage or server persistence. |
 
 ### Non-bypassable capability boundary
 
 - The Gemini service and intent parser return proposal data only; they cannot import Phantom, the transaction builder, or the execution service.
 - The backend interpret route returns a normalized intent proposal or clarification; no serialized transaction or sign/execute command is part of that response.
 - Only the browser's explicit user action can trigger Phantom authorization.
-- Transaction construction consumes validated intent; risk assessment cannot add, remove, or rewrite recipients or amounts.
+- Transaction construction consumes validated intent; risk assessment cannot add, remove, or rewrite recipients or amounts. Recipient transfers and audit memo are instructions in one atomic transaction.
 - A simulation result is informative, not authorization or a guarantee of success.
 
 ## Folder responsibilities
 
 ```text
 frontend/
-  assets/                  Static images and icons; no credentials.
-  src/config/              Public, non-secret frontend configuration.
-  src/components/          Reusable presentation components.
-  src/pages/               Requirement-driven page composition.
-  src/services/api/        Same-origin calls to the SolGuard backend.
-  src/services/wallet/     Browser-only Phantom provider manager.
-  src/services/blockchain/ Browser-side calls for previews, wallet transactions, and read-only Wallet X-Ray composition.
-  src/utils/               UI-only pure utilities; no duplicated server policy.
+  src/app.js, main.js      Client composition, route events, and Vite entry point.
+  src/components/          Activity table, copilot, intent, inspection, and confirmation UI.
+  src/pages/               Dashboard, Copilot, Scanner, X-Ray, History, and Settings screens.
+  src/services/wallet/     Browser-only Phantom provider connection and signing.
+  src/services/blockchain/ Balance, volatile session history, and browser-side helpers.
   src/styles/              Vite-imported main and component CSS.
-  src/pages/{dashboard,copilot,security-scanner,wallet-xray,transaction-preview,transaction-history}/
-                           Requirement-driven page areas; placeholders only.
 backend/src/
-  controllers/             HTTP request/response orchestration.
-  middleware/              Request limits, rate limiting, and API error handling.
-  routes/                  Express route registration.
-  security/                Backend-owned API security policy.
-  services/gemini/         Server-only Gemini client.
-  services/intent/         Parsing and validated intent orchestration.
-  validators/              HTTP parsing/size/transport checks; delegates domain invariants.
-  utils/                   Backend-only small utilities.
+  app.js, server.js         Express application and local HTTP entry point.
+  middleware/               AI interpretation rate limiting.
+  routes/                   Health and AI interpretation endpoints.
+  services/gemini/          Server-only Gemini transport and deterministic fallback.
+  validators/               Request, schema, and intent validation.
 blockchain/src/
-  config/                  Devnet-only cluster configuration.
-  inspection/              RPC-based wallet observation.
-  security/                Heuristic risk assessment and transaction-specific invariant checks.
-  memo/                    Memo data/instruction construction.
-  rpc/                     Connection and low-level RPC boundaries.
-  transactions/             Build, simulate, submit, and confirm primitives (single or 2–5 recipient batch).
-shared/schemas/             Versioned cross-layer JSON Schema contracts.
-shared/validation/          Canonical pure domain validation and amount conversion.
+  config/, rpc/              Fixed Devnet connection and commitment.
+  inspection/                RPC-based wallet observation.
+  security/                  Heuristic assessment and transaction risk summary.
+  transactions/              Build, simulate, sign-boundary, submit, and confirm.
+shared/schemas/               Cross-layer JSON Schema contracts.
+shared/validation/            Canonical pure domain validation and amount conversion.
 tests/
-  unit/                     Pure module and contract tests.
-  validation/               Malformed, boundary, and adversarial input cases.
-  backend/                  HTTP contract and error-path tests.
-  blockchain/               Devnet/local-validator integration boundary tests.
-  fixtures/                 Sanitized deterministic test inputs; never fake live evidence.
+  unit/                       Domain, wallet, transaction, UI-rendering, and schema tests.
+  backend/                    HTTP contract, health, and API failure tests.
 ```
 
 ## Structural decisions and deviations
@@ -153,7 +141,7 @@ tests/
 - **Keep security as a cross-cutting logical layer rather than a duplicated package:** Shared schemas and a single owner for each validator/policy avoid parallel implementations that can disagree.
 - **Add `shared/validation/` alongside `shared/schemas/`:** Schema files describe shape but cannot alone enforce exact decimal-to-lamports conversion, decoded public keys, sums, and cross-field invariants. A shared pure-domain implementation avoids divergent backend and blockchain rules; transport-specific checks remain local to each boundary.
 - **Use native Node test runner and JSON Schema files:** The current contract scaffold needs no additional dependencies. A schema validator can be selected when runtime schema validation is implemented; JSON Schema files alone do not constitute runtime validation.
-- **Use placeholders for future modules:** Empty folders keep the agreed architecture navigable without implying that product functionality exists.
+- **Keep remaining scaffold directories:** `.gitkeep` files reserve planned subareas; current implemented modules are listed above and empty directories do not imply implemented behavior.
 
 ## Testing architecture
 

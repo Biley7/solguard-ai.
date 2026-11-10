@@ -5,8 +5,14 @@ import { xrayPage } from './pages/xray.js';
 import { historyPage } from './pages/history.js';
 import { settingsPage } from './pages/settings.js';
 import { icon } from './components/icons.js';
+import { activityRows } from './components/activity-table.js';
 import { createPhantomWallet, PhantomWalletError } from './services/wallet/phantom-wallet.js';
 import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
+import {
+  getSessionTransactions,
+  recordSessionTransaction,
+  updateSessionTransaction,
+} from './services/blockchain/session-transaction-history.js';
 import { inspectWalletSecurity, WalletInspectionError } from '../../blockchain/src/inspection/wallet-security.js';
 import { walletInspectionError, walletInspectionView } from './components/wallet-inspection.js';
 import {
@@ -14,6 +20,21 @@ import {
   intentRequestErrorView,
   intentResultView,
 } from './components/intent-result.js';
+import {
+  transactionConfirmationView,
+  transactionExecutionView,
+  transactionPreparationErrorView,
+} from './components/transaction-confirmation.js';
+import { summarizeTransactionRisk } from '../../blockchain/src/security/transaction-risk.js';
+import {
+  prepareSolTransferTransaction,
+  TransactionPreparationError,
+} from '../../blockchain/src/transactions/transaction-builder.js';
+import {
+  executePreparedTransfer,
+  TransactionExecutionError,
+} from '../../blockchain/src/transactions/transaction-executor.js';
+import { getDevnetConnection } from '../../blockchain/src/rpc/devnet-connection.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -28,6 +49,7 @@ const phantomWallet = createPhantomWallet();
 let walletState = { status: 'disconnected', address: null };
 let balanceState = { status: 'idle', sol: null, observedAt: null };
 let currentIntentResponse = null;
+let pendingTransfer = null;
 let toastTimer;
 
 function shortenAddress(address) {
@@ -101,7 +123,7 @@ function renderWalletStatus() {
   }
   if (dataNotice) {
     dataNotice.innerHTML = connected
-      ? `<strong>Read-only wallet connected.</strong> Public key and balance are queried from fixed Solana Devnet RPC. Transaction history and transaction signing are not implemented.`
+      ? `<strong>Wallet connected.</strong> Public key and balance are queried from fixed Solana Devnet RPC. SOL transfers require a fresh pre-flight, successful simulation, and explicit Phantom approval.`
       : `<strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.`;
   }
 
@@ -166,11 +188,14 @@ async function disconnectWallet() {
 
 function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   const view = views[viewName] ? viewName : 'dashboard';
+  currentIntentResponse = null;
+  pendingTransfer = null;
   const content = document.querySelector('#app-content');
   content.innerHTML = views[view].render();
   document.querySelector('#current-page-label').textContent = views[view].label;
   document.title = `${views[view].label} | SolGuard AI`;
   renderWalletStatus();
+  renderSessionActivity();
 
   document.querySelectorAll('[data-view]').forEach((item) => {
     const active = item.dataset.view === view;
@@ -218,6 +243,7 @@ function renderCopilotResponse(response) {
 
 function renderCopilotProcessing() {
   currentIntentResponse = null;
+  pendingTransfer = null;
   const previewBody = document.querySelector('#intent-preview-body');
   if (previewBody) previewBody.innerHTML = intentProcessingView();
   const previewMeta = document.querySelector('#intent-preview .intent-preview-heading small');
@@ -293,38 +319,160 @@ async function handleCopilotSubmit(form) {
 }
 
 async function scanIntentRecipients(button) {
-  const intent = currentIntentResponse?.intent;
+  const interpretation = currentIntentResponse;
+  const intent = interpretation?.intent;
   const target = button.closest('.intent-result')?.querySelector('#intent-security-results');
   if (!intent || !target) return;
+  if (walletState.status !== 'connected' || !walletState.address) {
+    target.innerHTML = transactionPreparationErrorView('Connect Phantom before preparing a transfer. The wallet will not be asked to sign yet.');
+    return;
+  }
 
+  const payerAddress = walletState.address;
+  pendingTransfer = null;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
   target.innerHTML = '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Scanning recipients</strong><span>Read-only checks against Solana Devnet RPC.</span></div>';
-  const results = [];
+  try {
+    const results = await Promise.all(intent.recipients.map(async (recipient, index) => {
+      try {
+        const report = await inspectWalletSecurity(recipient.address);
+        return {
+          report,
+          markup: `
+            <section class="intent-recipient-scan">
+              <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
+              ${walletInspectionView(report, { compact: true })}
+            </section>`,
+        };
+      } catch (error) {
+        const message = error instanceof WalletInspectionError
+          ? error.message
+          : 'Devnet inspection could not be completed.';
+        return {
+          report: { address: recipient.address, riskAssessment: { status: 'unavailable' } },
+          markup: `
+            <section class="intent-recipient-scan">
+              <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
+              ${walletInspectionError(message)}
+            </section>`,
+        };
+      }
+    }));
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
 
-  for (const [index, recipient] of intent.recipients.entries()) {
-    try {
-      const report = await inspectWalletSecurity(recipient.address);
-      results.push(`
-        <section class="intent-recipient-scan">
-          <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
-          ${walletInspectionView(report, { compact: true })}
-        </section>`);
-    } catch (error) {
-      const message = error instanceof WalletInspectionError
-        ? error.message
-        : 'Devnet inspection could not be completed.';
-      results.push(`
-        <section class="intent-recipient-scan">
-          <h3>Recipient ${index + 1}</h3>
-          ${walletInspectionError(message)}
-        </section>`);
+    if (results.some(({ report }, index) => (
+      report.address !== intent.recipients[index].address
+      || report.network && report.network !== 'devnet'
+    ))) {
+      target.innerHTML = transactionPreparationErrorView('Recipient inspection results did not match the reviewed intent. Re-run the scan.');
+      return;
     }
+    const riskSummary = summarizeTransactionRisk(results.map(({ report }) => report));
+    target.innerHTML = results.map(({ markup }) => markup).join('');
+    if (riskSummary.status !== 'assessed') {
+      target.insertAdjacentHTML('beforeend', transactionPreparationErrorView(riskSummary.summary));
+      return;
+    }
+
+    target.insertAdjacentHTML('beforeend', '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Validating and simulating one atomic transaction</strong><span>Checking recipient account types, sender funds, network fee, and the complete Devnet transaction.</span></div>');
+    const prepared = await prepareSolTransferTransaction({
+      intent,
+      payerAddress,
+      riskSummary,
+    });
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
+    pendingTransfer = { prepared, riskSummary, payerAddress };
+    const currentTarget = document.getElementById('intent-security-results');
+    if (currentTarget) {
+      currentTarget.innerHTML = results.map(({ markup }) => markup).join('')
+        + transactionConfirmationView(prepared, riskSummary);
+    }
+  } catch (error) {
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
+    const message = error instanceof TransactionPreparationError
+      ? error.message
+      : 'The Devnet transaction could not be safely prepared.';
+    const currentTarget = document.getElementById('intent-security-results');
+    if (currentTarget) currentTarget.insertAdjacentHTML('beforeend', transactionPreparationErrorView(message));
+  } finally {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+  }
+}
+
+function cancelPreparedTransfer(button) {
+  pendingTransfer = null;
+  const confirmation = button.closest('.transaction-confirmation');
+  confirmation?.remove();
+  showToast('Prepared transaction cancelled. No wallet request was made.');
+}
+
+async function approvePreparedTransfer(button) {
+  const pending = pendingTransfer;
+  if (!pending || walletState.status !== 'connected' || walletState.address !== pending.payerAddress) {
+    pendingTransfer = null;
+    showToast('The connected wallet changed. Scan and prepare the transaction again.', 'warning');
+    return;
+  }
+  if (
+    pending.riskSummary.highOrCritical
+    && !button.closest('.transaction-confirmation')?.querySelector('[data-risk-acknowledgement]')?.checked
+  ) {
+    showToast('Review the high-risk warning and acknowledge it before opening Phantom.', 'warning');
+    return;
   }
 
-  target.innerHTML = results.join('');
-  button.disabled = false;
-  button.removeAttribute('aria-busy');
+  const resultElement = button.closest('.transaction-confirmation')?.querySelector('#transaction-execution-result');
+  if (!resultElement) return;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  resultElement.innerHTML = '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Waiting for explicit Phantom approval</strong><span>Check the transaction details in Phantom. Rejection will not submit anything.</span></div>';
+
+  let sessionTransactionId;
+  try {
+    sessionTransactionId = recordSessionTransaction(
+      pending.prepared.preview,
+      pending.riskSummary,
+    );
+    const result = await executePreparedTransfer(pending.prepared, {
+      signTransaction: (transaction) => phantomWallet.signTransaction(transaction, pending.payerAddress),
+      connection: getDevnetConnection(),
+    });
+    updateSessionTransaction(sessionTransactionId, result);
+    resultElement.innerHTML = transactionExecutionView(result, pending.prepared.preview);
+    pendingTransfer = null;
+    if (result.status === 'confirmed') {
+      showToast('The transaction was confirmed on Solana Devnet.', 'success');
+    } else {
+      showToast('The transaction was submitted but is not confirmed. Check its Devnet Explorer status before retrying.', 'warning');
+    }
+    void refreshBalance({ notifyError: true });
+  } catch (error) {
+    const rejected = error instanceof TransactionExecutionError && error.code === 'USER_REJECTED'
+      || error instanceof PhantomWalletError && error.code === 'USER_REJECTED';
+    const code = error instanceof TransactionExecutionError || error instanceof PhantomWalletError
+      ? error.code
+      : 'EXECUTION_FAILED';
+    const result = {
+      status: rejected ? 'rejected' : 'failed',
+      signature: error.signature ?? null,
+      confirmationStatus: null,
+      explorerUrl: error.signature
+        ? `https://explorer.solana.com/tx/${encodeURIComponent(error.signature)}?cluster=devnet`
+        : null,
+      errorCode: code,
+      memoVerification: 'unavailable',
+    };
+    if (sessionTransactionId !== undefined) updateSessionTransaction(sessionTransactionId, result);
+    resultElement.innerHTML = transactionExecutionView(result, pending.prepared.preview);
+    pendingTransfer = null;
+    showToast(rejected ? 'Phantom signing was rejected. No transaction was submitted.' : error.message, 'warning');
+  } finally {
+    renderSessionActivity();
+    if (pendingTransfer === pending) button.disabled = false;
+    button.removeAttribute('aria-busy');
+  }
 }
 
 async function handleAddressSubmit(form) {
@@ -386,16 +534,27 @@ async function handleAddressSubmit(form) {
   }
 }
 
+function renderSessionActivity() {
+  const transactions = getSessionTransactions();
+  const search = document.querySelector('#history-search')?.value ?? '';
+  const status = document.querySelector('#history-status')?.value ?? 'all';
+  document.querySelectorAll('.activity-table tbody').forEach((body) => {
+    body.innerHTML = activityRows(
+      transactions,
+      body.closest('.table-wrap')?.classList.contains('table-wrap--compact')
+        ? {}
+        : { search, status },
+    );
+  });
+  const count = document.querySelector('.history-count');
+  if (count) count.textContent = `${transactions.length} record${transactions.length === 1 ? '' : 's'}`;
+}
+
 function updateHistoryEmptyState() {
   const search = document.querySelector('#history-search');
   const status = document.querySelector('#history-status');
-  const emptyDescription = document.querySelector('.activity-table .empty-state p');
-  if (!emptyDescription || !search || !status) return;
-
-  const hasFilter = search.value.trim() || status.value !== 'all';
-  emptyDescription.textContent = hasFilter
-    ? 'No loaded activity matches these filters. Verified Devnet history is not connected.'
-    : 'Connect a wallet and load verified Devnet activity to see transactions here.';
+  if (!search || !status) return;
+  renderSessionActivity();
 }
 
 function onClick(event) {
@@ -425,6 +584,11 @@ function onClick(event) {
   if (action === 'scan-intent-recipients') {
     const button = event.target.closest('[data-action="scan-intent-recipients"]');
     if (button) void scanIntentRecipients(button);
+  } else if (action === 'cancel-transfer') {
+    cancelPreparedTransfer(event.target.closest('[data-action="cancel-transfer"]'));
+  } else if (action === 'approve-transfer') {
+    const button = event.target.closest('[data-action="approve-transfer"]');
+    if (button) void approvePreparedTransfer(button);
   } else if (action === 'connect-wallet') {
     if (walletState.status === 'connected') {
       showToast('Phantom is connected. Use Disconnect to end the wallet session.');
@@ -433,10 +597,9 @@ function onClick(event) {
     }
   } else if (action === 'disconnect-wallet') {
     void disconnectWallet();
-  } else if (action === 'authorize') {
-    showToast('No transaction is available to authorize. Signing is not implemented and no wallet request was made.', 'warning');
   } else if (action === 'refresh-history') {
-    showToast('No activity was fetched. Devnet RPC integration is not available.');
+    renderSessionActivity();
+    showToast('Displayed transactions initiated in this application session only.');
   } else if (action === 'refresh-balance') {
     if (!walletState.address) {
       showToast('Connect Phantom before refreshing your Devnet balance.', 'warning');
@@ -474,8 +637,17 @@ export function mountApp() {
   document.addEventListener('input', (event) => {
     if (event.target.matches('#history-search, #history-status')) updateHistoryEmptyState();
   });
+  document.addEventListener('change', (event) => {
+    if (event.target.matches('[data-risk-acknowledgement]')) {
+      const approvalButton = event.target.closest('.transaction-confirmation')
+        ?.querySelector('[data-action="approve-transfer"]');
+      if (approvalButton) approvalButton.disabled = !event.target.checked;
+    }
+    if (event.target.matches('#history-status')) renderSessionActivity();
+  });
   phantomWallet.subscribe((state) => {
     walletState = state;
+    if (pendingTransfer && state.address !== pendingTransfer.payerAddress) pendingTransfer = null;
     if (state.status !== 'connected') {
       balanceState = { status: 'idle', sol: null, observedAt: null };
     }

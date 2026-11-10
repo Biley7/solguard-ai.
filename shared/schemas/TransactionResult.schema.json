@@ -4,7 +4,7 @@
   "title": "TransactionResult",
   "type": "object",
   "additionalProperties": false,
-  "required": ["status", "signature", "confirmationStatus", "explorerUrl", "errorCode"],
+  "required": ["status", "signature", "confirmationStatus", "explorerUrl", "errorCode", "memoVerification"],
   "properties": {
     "status": {
       "enum": ["submitted", "confirmed", "failed", "rejected"]
@@ -22,6 +22,9 @@
     },
     "errorCode": {
       "type": ["string", "null"]
+    },
+    "memoVerification": {
+      "enum": ["verified", "not_verified", "unavailable"]
     }
   },
   "allOf": [
@@ -35,7 +38,7 @@
           "signature": { "type": "string", "minLength": 1 },
           "confirmationStatus": { "enum": ["processed", null] },
           "explorerUrl": { "type": "string", "format": "uri" },
-          "errorCode": { "type": "null" }
+          "errorCode": { "type": ["string", "null"] }
         }
       }
     },
