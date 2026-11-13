@@ -233,6 +233,45 @@ test('reports atomic multi-recipient failure with its signature and Devnet Explo
   assert.equal(result.memoVerification, 'not_verified');
 });
 
+test('emits only real lifecycle checkpoints in execution order', async () => {
+  const { payer, prepared } = await createPreparedTransaction();
+  const events = [];
+  const result = await executePreparedTransfer(prepared, {
+    signTransaction: async (transaction) => signedCopy(transaction, payer),
+    connection: fakeConnection(),
+    onProgress: (event) => events.push(event.status),
+  });
+
+  assert.equal(result.status, 'confirmed');
+  assert.deepEqual(events, [
+    'preparing',
+    'awaiting_approval',
+    'submitted',
+    'confirming',
+    'confirmed',
+  ]);
+});
+
+test('reports a rejected approval without claiming submission and isolates presentation errors', async () => {
+  const { prepared } = await createPreparedTransaction();
+  const connection = fakeConnection();
+  const events = [];
+  await assert.rejects(
+    executePreparedTransfer(prepared, {
+      signTransaction: async () => { throw Object.assign(new Error('Rejected by user'), { code: 4001 }); },
+      connection,
+      onProgress: (event) => {
+        events.push(event.status);
+        throw new Error('presentation failed');
+      },
+    }),
+    (error) => error.code === 'USER_REJECTED',
+  );
+
+  assert.deepEqual(events, ['preparing', 'awaiting_approval', 'rejected']);
+  assert.equal(connection.calls.some(([name]) => name === 'send'), false);
+});
+
 test('reports pending submission on confirmation timeout and safe submission failures', async () => {
   const { payer, prepared } = await createPreparedTransaction();
   const pending = await executePreparedTransfer(prepared, {

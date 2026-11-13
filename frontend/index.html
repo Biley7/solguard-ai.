@@ -3,23 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
       content="SolGuard AI command center for reviewing Solana Devnet activity and transfer intent."
     />
-    <meta name="theme-color" content="#101715" />
+    <script>
+      (() => {
+        const modes = ['system', 'midnight', 'daylight'];
+        let preference = 'system';
+        try {
+          const stored = localStorage.getItem('solguard-theme');
+          if (stored && modes.includes(stored)) preference = stored;
+        } catch {
+          /* Storage may be blocked; system preference remains the fallback. */
+        }
+        const prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches ?? false;
+        const resolved = preference === 'midnight' || preference === 'daylight'
+          ? preference
+          : prefersLight ? 'daylight' : 'midnight';
+        let sidebarCollapsed = false;
+        try {
+          sidebarCollapsed = localStorage.getItem('solguard-sidebar-collapsed') === 'true';
+        } catch {
+          /* Keep the expanded shell when storage is unavailable. */
+        }
+        const root = document.documentElement;
+        root.dataset.theme = resolved;
+        root.dataset.themePreference = preference;
+        root.dataset.sidebar = sidebarCollapsed ? 'collapsed' : 'expanded';
+        root.style.colorScheme = resolved === 'daylight' ? 'light' : 'dark';
+      })();
+    </script>
+    <style>
+      html {
+        background: Canvas;
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=JetBrains+Mono:wght@400..700&display=swap"
+      rel="stylesheet"
+    />
     <title>Command Center | SolGuard AI</title>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
         <a class="brand" href="#command-center" data-view="dashboard" aria-label="SolGuard AI command center">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" fill="none">
-              <path d="M16 3.5 26 7v7.2c0 6.1-4.1 11.6-10 14.3C10.1 25.8 6 20.3 6 14.2V7l10-3.5Z" stroke="currentColor" stroke-width="1.8" />
-              <path d="m11.5 15.9 3 3 6.2-6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </span>
+          <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
           <span class="brand-copy">
             <strong>SolGuard</strong>
             <span>AI SECURITY</span>
@@ -28,26 +61,26 @@
 
         <div class="sidebar-label">WORKSPACE</div>
         <nav class="primary-nav" aria-label="Workspace">
-          <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page">
-            <span class="nav-icon" data-icon="grid"></span><span>Command Center</span>
+          <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page" title="Overview">
+            <span class="nav-icon" data-icon="grid"></span><span class="nav-label">Overview</span>
           </button>
-          <button class="nav-item" type="button" data-view="copilot">
-            <span class="nav-icon" data-icon="spark"></span><span>AI Copilot</span>
+          <button class="nav-item" type="button" data-view="copilot" title="AI Copilot">
+            <span class="nav-icon" data-icon="spark"></span><span class="nav-label">AI Copilot</span>
           </button>
-          <button class="nav-item" type="button" data-view="scanner">
-            <span class="nav-icon" data-icon="scan"></span><span>Wallet Scanner</span>
+          <button class="nav-item" type="button" data-view="scanner" title="Security Scanner">
+            <span class="nav-icon" data-icon="scan"></span><span class="nav-label">Security Scanner</span>
           </button>
-          <button class="nav-item" type="button" data-view="xray">
-            <span class="nav-icon" data-icon="search"></span><span>Wallet X-Ray</span>
+          <button class="nav-item" type="button" data-view="xray" title="Wallet X-Ray">
+            <span class="nav-icon" data-icon="search"></span><span class="nav-label">Wallet X-Ray</span>
           </button>
-          <button class="nav-item" type="button" data-view="history">
-            <span class="nav-icon" data-icon="history"></span><span>Transaction History</span>
+          <button class="nav-item" type="button" data-view="history" title="Transactions">
+            <span class="nav-icon" data-icon="history"></span><span class="nav-label">Transactions</span>
           </button>
         </nav>
 
         <div class="sidebar-spacer"></div>
-        <button class="nav-item settings-link" type="button" data-view="settings">
-          <span class="nav-icon" data-icon="settings"></span><span>Settings</span>
+        <button class="nav-item settings-link" type="button" data-view="settings" title="Settings">
+          <span class="nav-icon" data-icon="settings"></span><span class="nav-label">Settings</span>
         </button>
         <div class="sidebar-network">
           <span class="status-dot status-dot--amber" id="rpc-status-dot"></span>
@@ -57,10 +90,15 @@
         <div class="sidebar-foot">SolGuard AI <span>•</span> MVP Preview</div>
       </aside>
 
+      <button class="sidebar-scrim" type="button" data-action="close-sidebar" aria-label="Close navigation" tabindex="-1"></button>
+
       <div class="workspace">
         <header class="topbar">
-          <button class="icon-button mobile-menu" type="button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false">
+          <button class="icon-button mobile-menu" type="button" id="menu-toggle" aria-controls="app-sidebar" aria-label="Open navigation" aria-expanded="false">
             <span data-icon="menu"></span>
+          </button>
+          <button class="icon-button sidebar-toggle" type="button" id="sidebar-collapse" aria-controls="app-sidebar" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation">
+            <span data-icon="chevrons-left"></span>
           </button>
           <div class="topbar-context">
             <span class="context-label">SOLANA SECURITY</span>
@@ -68,6 +106,18 @@
             <span class="context-page" id="current-page-label">Command Center</span>
           </div>
           <div class="topbar-actions">
+            <div class="theme-switch" role="group" aria-label="Appearance">
+              <button class="theme-option" type="button" data-action="set-theme" data-theme-value="midnight" aria-pressed="false" aria-label="Solana Midnight" title="Solana Midnight">
+                <span data-icon="moon"></span>
+              </button>
+              <button class="theme-option" type="button" data-action="set-theme" data-theme-value="daylight" aria-pressed="false" aria-label="Solana Daylight" title="Solana Daylight">
+                <span data-icon="sun"></span>
+              </button>
+              <button class="theme-option" type="button" data-action="set-theme" data-theme-value="system" aria-pressed="false" aria-label="Follow system appearance" title="System">
+                <span data-icon="monitor"></span>
+              </button>
+            </div>
+            <span class="topbar-divider"></span>
             <span class="environment-chip"><span class="status-dot status-dot--amber"></span>DEVNET</span>
             <span class="topbar-divider"></span>
             <button type="button" class="wallet-connect" data-action="connect-wallet">
@@ -76,6 +126,9 @@
               <span data-icon="chevron-down"></span>
             </button>
             <button type="button" class="wallet-disconnect" data-action="disconnect-wallet" hidden>Disconnect</button>
+            <button class="icon-button topbar-settings" type="button" data-view="settings" aria-label="Open settings" title="Settings">
+              <span data-icon="settings"></span>
+            </button>
           </div>
         </header>
 

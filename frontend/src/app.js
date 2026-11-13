@@ -14,7 +14,11 @@ import {
   updateSessionTransaction,
 } from './services/blockchain/session-transaction-history.js';
 import { inspectWalletSecurity, WalletInspectionError } from '../../blockchain/src/inspection/wallet-security.js';
-import { walletInspectionError, walletInspectionView } from './components/wallet-inspection.js';
+import {
+  walletInspectionError,
+  walletInspectionLoading,
+  walletInspectionView,
+} from './components/wallet-inspection.js';
 import {
   intentProcessingView,
   intentRequestErrorView,
@@ -22,6 +26,7 @@ import {
 } from './components/intent-result.js';
 import {
   transactionConfirmationView,
+  transactionExecutionProgressView,
   transactionExecutionView,
   transactionPreparationErrorView,
 } from './components/transaction-confirmation.js';
@@ -35,6 +40,8 @@ import {
   TransactionExecutionError,
 } from '../../blockchain/src/transactions/transaction-executor.js';
 import { getDevnetConnection } from '../../blockchain/src/rpc/devnet-connection.js';
+import { initTheme, setThemePreference, THEME_LABELS } from './services/theme/theme.js';
+import { recordWalletScan } from './services/security/scan-history.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -51,9 +58,49 @@ let balanceState = { status: 'idle', sol: null, observedAt: null };
 let currentIntentResponse = null;
 let pendingTransfer = null;
 let toastTimer;
+const SIDEBAR_STORAGE_KEY = 'solguard-sidebar-collapsed';
+const mobileSidebarQuery = window.matchMedia('(max-width: 760px)');
 
 function shortenAddress(address) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
+
+function readSidebarCollapsed() {
+  try {
+    return globalThis.localStorage?.getItem(SIDEBAR_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function applySidebarCollapsed(collapsed, { persist = false } = {}) {
+  const root = document.documentElement;
+  root.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
+
+  const button = document.querySelector('#sidebar-collapse');
+  if (button) {
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+    button.title = collapsed ? 'Expand navigation' : 'Collapse navigation';
+    const iconSlot = button.querySelector('[data-icon]');
+    if (iconSlot) iconSlot.innerHTML = icon(collapsed ? 'chevrons-right' : 'chevrons-left');
+  }
+
+  if (persist) {
+    try {
+      globalThis.localStorage?.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    } catch {
+      /* The shell still collapses for this page when storage is blocked. */
+    }
+  }
+}
+
+function initSidebar() {
+  applySidebarCollapsed(readSidebarCollapsed());
+  document.querySelector('#sidebar-collapse')?.addEventListener('click', () => {
+    const collapsed = document.documentElement.dataset.sidebar !== 'collapsed';
+    applySidebarCollapsed(collapsed, { persist: true });
+  });
 }
 
 function showToast(message, tone = 'info') {
@@ -67,6 +114,57 @@ function showToast(message, tone = 'info') {
   }, 4200);
 }
 
+async function copyText(value, label = 'Value') {
+  if (!value) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard is unavailable.');
+    await navigator.clipboard.writeText(value);
+    showToast(`${label} copied.`, 'success');
+  } catch {
+    showToast(`Could not copy the ${label.toLowerCase()} in this browser.`, 'warning');
+  }
+}
+
+async function copyWalletAddress() {
+  const address = walletState.address;
+  if (!address) return;
+  await copyText(address, 'Wallet address');
+}
+
+function updateCopilotCharCount() {
+  const prompt = document.querySelector('#copilot-prompt');
+  const counter = document.querySelector('#copilot-char-count');
+  if (prompt && counter) counter.textContent = String(prompt.value.length);
+}
+
+function activateTab(tab) {
+  const group = tab.closest('[data-tabs]');
+  const tablist = tab.closest('[role="tablist"]');
+  if (!group || !tablist) return;
+  const tabs = [...tablist.querySelectorAll('[data-tab-target]')];
+  tabs.forEach((item) => {
+    const active = item === tab;
+    item.classList.toggle('is-active', active);
+    item.setAttribute('aria-selected', String(active));
+    item.tabIndex = active ? 0 : -1;
+  });
+  group.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+    panel.hidden = panel.id !== tab.dataset.tabTarget;
+  });
+}
+
+function preferredScrollBehavior() {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
+
+function focusCopilotPrompt() {
+  const prompt = document.querySelector('#copilot-prompt');
+  if (!prompt) return;
+  prompt.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'center' });
+  prompt.focus({ preventScroll: true });
+  updateCopilotCharCount();
+}
+
 function renderWalletStatus() {
   const connected = walletState.status === 'connected' && walletState.address;
   const walletButton = document.querySelector('[data-action="connect-wallet"]');
@@ -74,19 +172,27 @@ function renderWalletStatus() {
   const disconnectButton = document.querySelector('[data-action="disconnect-wallet"]');
   const addressValue = document.querySelector('#wallet-address-value');
   const addressNote = document.querySelector('#wallet-address-note');
+  const copyAddressButton = document.querySelector('#copy-wallet-address');
+  const connectionState = document.querySelector('#wallet-connection-state');
   const balanceValue = document.querySelector('#wallet-balance-value');
   const balanceNote = document.querySelector('#wallet-balance-note');
   const dataState = document.querySelector('#wallet-data-state');
   const dataNotice = document.querySelector('#dashboard-data-notice p');
+  const monitoringStatus = document.querySelector('#security-monitoring-status');
+  const monitoringCopy = document.querySelector('#security-monitoring-copy');
   const rpcStatus = document.querySelector('#rpc-status');
   const rpcDot = document.querySelector('#rpc-status-dot');
   const settingsWalletStatus = document.querySelector('#settings-wallet-status');
   const settingsRpcStatus = document.querySelector('#settings-rpc-status');
 
   if (walletButton && walletLabel) {
-    walletButton.disabled = walletState.status === 'connecting';
+    const connecting = walletState.status === 'connecting';
+    walletButton.disabled = connecting;
     walletButton.classList.toggle('is-connected', Boolean(connected));
-    walletLabel.textContent = walletState.status === 'connecting'
+    walletButton.classList.toggle('is-connecting', connecting);
+    if (connecting) walletButton.setAttribute('aria-busy', 'true');
+    else walletButton.removeAttribute('aria-busy');
+    walletLabel.textContent = connecting
       ? 'Connecting…'
       : connected
         ? shortenAddress(walletState.address)
@@ -94,15 +200,17 @@ function renderWalletStatus() {
     walletButton.title = connected ? walletState.address : 'Connect Phantom wallet';
     walletButton.setAttribute('aria-label', connected
       ? `Connected wallet ${walletState.address}`
-      : walletState.status === 'connecting' ? 'Connecting to Phantom' : 'Connect Phantom wallet');
+      : connecting ? 'Connecting to Phantom' : 'Connect Phantom wallet');
   }
   if (disconnectButton) disconnectButton.hidden = !connected;
   if (addressValue) {
-    addressValue.textContent = connected ? shortenAddress(walletState.address) : 'Not connected';
+    addressValue.textContent = connected ? walletState.address : 'Not connected';
     addressValue.title = connected ? walletState.address : '';
     addressValue.classList.toggle('value-unavailable', !connected);
   }
-  if (addressNote) addressNote.textContent = connected ? 'Phantom public key' : 'Connect Phantom to begin';
+  if (addressNote) addressNote.textContent = connected ? 'Phantom public key · observed from Devnet' : 'Connect Phantom to begin';
+  if (copyAddressButton) copyAddressButton.hidden = !connected;
+  if (connectionState) connectionState.textContent = connected ? 'Connected' : walletState.status === 'connecting' ? 'Connecting' : 'Not connected';
 
   if (balanceValue && balanceNote) {
     const balanceLabels = {
@@ -123,8 +231,16 @@ function renderWalletStatus() {
   }
   if (dataNotice) {
     dataNotice.innerHTML = connected
-      ? `<strong>Wallet connected.</strong> Public key and balance are queried from fixed Solana Devnet RPC. SOL transfers require a fresh pre-flight, successful simulation, and explicit Phantom approval.`
-      : `<strong>Devnet-only preview.</strong> Connect Phantom to load your live wallet address and Devnet balance. Other on-chain values and activity remain unavailable until their integrations are implemented.`;
+      ? `<strong>Wallet connected.</strong> Address and balance are observed through fixed Solana Devnet RPC. Scans and transaction records remain session-only; unverified results are never treated as safe.`
+      : `<strong>Observed data only.</strong> Connect Phantom to load your Devnet address and balance. Security summaries never substitute demo data for missing live values.`;
+  }
+  if (monitoringStatus) {
+    monitoringStatus.textContent = connected ? 'Wallet session active' : 'No wallet session';
+  }
+  if (monitoringCopy) {
+    monitoringCopy.textContent = connected
+      ? 'Balance observations use fixed Devnet RPC. Recipient scans remain manual and session-only.'
+      : 'Connect Phantom to observe your Devnet balance and run recipient checks.';
   }
 
   const rpcAvailable = balanceState.status === 'loaded';
@@ -164,7 +280,10 @@ async function connectWallet() {
   walletState = { status: 'connecting', address: null };
   renderWalletStatus();
   try {
-    await phantomWallet.connect();
+    const state = await phantomWallet.connect();
+    if (state?.status === 'connected' && state.address) {
+      showToast(`Phantom connected: ${shortenAddress(state.address)}.`, 'success');
+    }
   } catch (error) {
     walletState = {
       status: 'disconnected',
@@ -181,8 +300,38 @@ async function connectWallet() {
 async function disconnectWallet() {
   try {
     await phantomWallet.disconnect();
+    showToast('Phantom disconnected. No new wallet requests can be signed.');
   } catch (error) {
     showToast(error instanceof PhantomWalletError ? error.message : 'Could not disconnect Phantom.', 'warning');
+  }
+}
+
+function setSidebarOpen(open, { moveFocus = false, restoreFocus = false } = {}) {
+  const sidebar = document.querySelector('#app-sidebar');
+  const menuToggle = document.querySelector('#menu-toggle');
+  if (!sidebar || !menuToggle) return;
+
+  sidebar.classList.toggle('is-open', open);
+  menuToggle.setAttribute('aria-expanded', String(open));
+  menuToggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+  document.body.classList.toggle('nav-open', open);
+  const workspace = document.querySelector('.workspace');
+  if (workspace) workspace.inert = open;
+
+  if (open && moveFocus) {
+    const target = sidebar.querySelector('.nav-item.is-active') ?? sidebar.querySelector('.nav-item');
+    target?.focus({ preventScroll: true });
+  } else if (!open && restoreFocus) {
+    menuToggle.focus({ preventScroll: true });
+  }
+}
+
+function syncSidebarViewport() {
+  const sidebar = document.querySelector('#app-sidebar');
+  if (!sidebar) return;
+
+  if (!mobileSidebarQuery.matches && sidebar.classList.contains('is-open')) {
+    setSidebarOpen(false);
   }
 }
 
@@ -192,6 +341,9 @@ function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   pendingTransfer = null;
   const content = document.querySelector('#app-content');
   content.innerHTML = views[view].render();
+  content.classList.remove('view-enter');
+  void content.offsetWidth;
+  content.classList.add('view-enter');
   document.querySelector('#current-page-label').textContent = views[view].label;
   document.title = `${views[view].label} | SolGuard AI`;
   renderWalletStatus();
@@ -206,10 +358,8 @@ function renderView(viewName, { updateHistory = true, focus = false } = {}) {
     }
   });
 
-  document.querySelector('#app-sidebar').classList.remove('is-open');
-  const menuToggle = document.querySelector('#menu-toggle');
-  menuToggle.setAttribute('aria-expanded', 'false');
-  menuToggle.setAttribute('aria-label', 'Open navigation');
+  setSidebarOpen(false);
+  updateCopilotCharCount();
 
   if (updateHistory) window.history.pushState({ view }, '', `#${view}`);
   if (focus) content.focus({ preventScroll: true });
@@ -244,6 +394,8 @@ function renderCopilotResponse(response) {
 function renderCopilotProcessing() {
   currentIntentResponse = null;
   pendingTransfer = null;
+  const reviewStage = document.getElementById('intent-review-stage');
+  if (reviewStage) reviewStage.innerHTML = '';
   const previewBody = document.querySelector('#intent-preview-body');
   if (previewBody) previewBody.innerHTML = intentProcessingView();
   const previewMeta = document.querySelector('#intent-preview .intent-preview-heading small');
@@ -318,94 +470,189 @@ async function handleCopilotSubmit(form) {
   }
 }
 
+function reviewStageHeader(title, description, eyebrow = '02 · SECURITY REVIEW') {
+  return `<div class="review-stage-head">
+    <div>
+      <span class="eyebrow">${eyebrow}</span>
+      <h2 id="review-stage-title" tabindex="-1">${title}</h2>
+      <p>${description}</p>
+    </div>
+    <button class="button button--text" type="button" data-action="edit-transfer">${icon('chevrons-left')}<span>Go back and edit</span></button>
+  </div>`;
+}
+
+function focusReviewStage({ focus = true } = {}) {
+  const stage = document.getElementById('intent-review-stage');
+  if (!stage) return;
+  stage.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
+  if (focus) stage.querySelector('#review-stage-title')?.focus({ preventScroll: true });
+}
+
 async function scanIntentRecipients(button) {
   const interpretation = currentIntentResponse;
   const intent = interpretation?.intent;
-  const target = button.closest('.intent-result')?.querySelector('#intent-security-results');
-  if (!intent || !target) return;
+  const stage = document.getElementById('intent-review-stage');
+  if (!intent || !stage) return;
+
   if (walletState.status !== 'connected' || !walletState.address) {
-    target.innerHTML = transactionPreparationErrorView('Connect Phantom before preparing a transfer. The wallet will not be asked to sign yet.');
+    stage.innerHTML = reviewStageHeader(
+      'Connect Phantom to prepare the review',
+      'Recipient checks and transaction simulation require a connected Devnet wallet. No signing request is made at this stage.',
+    ) + transactionPreparationErrorView('Connect Phantom before preparing a transfer. The wallet will not be asked to sign yet.');
+    focusReviewStage();
     return;
   }
 
   const payerAddress = walletState.address;
+  let checksMarkup = '';
   pendingTransfer = null;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
-  target.innerHTML = '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Scanning recipients</strong><span>Read-only checks against Solana Devnet RPC.</span></div>';
+  stage.innerHTML = reviewStageHeader(
+    'Scanning recipients',
+    'Reading public Devnet account facts for each destination before anything is prepared.',
+  ) + walletInspectionLoading('scanner');
+  focusReviewStage({ focus: false });
+
   try {
-    const results = await Promise.all(intent.recipients.map(async (recipient, index) => {
+    const results = await Promise.all(intent.recipients.map(async (recipient) => {
       try {
         const report = await inspectWalletSecurity(recipient.address);
+        recordWalletScan(report, 'Transfer preflight');
         return {
           report,
-          markup: `
-            <section class="intent-recipient-scan">
-              <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
-              ${walletInspectionView(report, { compact: true })}
-            </section>`,
+          markup: walletInspectionView(report, { compact: true }),
         };
       } catch (error) {
         const message = error instanceof WalletInspectionError
           ? error.message
           : 'Devnet inspection could not be completed.';
+        const observedAt = new Date().toISOString();
         return {
-          report: { address: recipient.address, riskAssessment: { status: 'unavailable' } },
-          markup: `
-            <section class="intent-recipient-scan">
-              <h3>Recipient ${index + 1} · ${recipient.address.slice(0, 6)}…${recipient.address.slice(-6)}</h3>
-              ${walletInspectionError(message)}
-            </section>`,
+          report: {
+            address: recipient.address,
+            network: 'devnet',
+            source: 'solana-rpc',
+            accountStatus: 'unavailable',
+            dataAvailability: 'partial',
+            observedAt,
+            balanceLamports: null,
+            accountInfo: null,
+            accountType: 'unknown',
+            history: { available: false, signaturesInspected: 0, limit: 20, recentSignatures: [] },
+            rpcFailures: ['balance', 'accountInfo', 'signatures'],
+            missingInformation: [message],
+            riskAssessment: {
+              status: 'unavailable',
+              score: null,
+              category: 'unavailable',
+              indicators: [],
+              missingInformation: [message],
+              recommendedAction: 'Do not treat this recipient as safe. Retry the inspection or verify the address independently before any transfer.',
+              assessedAt: observedAt,
+              disclaimer: 'Heuristic information only; this assessment does not guarantee wallet safety.',
+            },
+          },
+          markup: walletInspectionError(message),
         };
       }
     }));
-    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
+      || document.getElementById('intent-review-stage') !== stage) return;
 
     if (results.some(({ report }, index) => (
       report.address !== intent.recipients[index].address
       || report.network && report.network !== 'devnet'
     ))) {
-      target.innerHTML = transactionPreparationErrorView('Recipient inspection results did not match the reviewed intent. Re-run the scan.');
-      return;
-    }
-    const riskSummary = summarizeTransactionRisk(results.map(({ report }) => report));
-    target.innerHTML = results.map(({ markup }) => markup).join('');
-    if (riskSummary.status !== 'assessed') {
-      target.insertAdjacentHTML('beforeend', transactionPreparationErrorView(riskSummary.summary));
+      stage.innerHTML = reviewStageHeader(
+        'Review could not be verified',
+        'Recipient inspection results did not match the interpreted intent. No transaction was prepared.',
+      ) + transactionPreparationErrorView('Recipient inspection results did not match the reviewed intent. Re-run the scan.');
+      focusReviewStage();
       return;
     }
 
-    target.insertAdjacentHTML('beforeend', '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Validating and simulating one atomic transaction</strong><span>Checking recipient account types, sender funds, network fee, and the complete Devnet transaction.</span></div>');
+    checksMarkup = results.map(({ markup }, index) => `<div class="recipient-review-item">
+      <span class="recipient-review-index">R${String(index + 1).padStart(2, '0')}</span>
+      ${markup}
+    </div>`).join('');
+    const riskSummary = summarizeTransactionRisk(results.map(({ report }) => report));
+    if (riskSummary.status !== 'assessed') {
+      stage.innerHTML = reviewStageHeader(
+        'Security review blocked',
+        'At least one recipient could not be verified. The transfer cannot be prepared from an unverified assessment.',
+      ) + `<div class="review-recipient-checks">${checksMarkup}</div>`
+        + transactionPreparationErrorView(riskSummary.summary);
+      focusReviewStage();
+      return;
+    }
+
+    stage.innerHTML = reviewStageHeader(
+      'Validating the transfer',
+      'Recipient evidence is complete. SolGuard is now simulating one atomic transfer without requesting a signature.',
+    ) + `<div class="review-recipient-checks">${checksMarkup}</div>`
+      + `<div class="review-simulation-loading" role="status"><span class="processing-spinner">${icon('loader-circle')}</span><span><strong>Simulating one atomic transaction</strong><small>Checking recipient account types, sender funds, network fee, and the complete Devnet transaction.</small></span></div>`;
+
     const prepared = await prepareSolTransferTransaction({
       intent,
       payerAddress,
       riskSummary,
     });
-    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
+      || document.getElementById('intent-review-stage') !== stage) return;
     pendingTransfer = { prepared, riskSummary, payerAddress };
-    const currentTarget = document.getElementById('intent-security-results');
-    if (currentTarget) {
-      currentTarget.innerHTML = results.map(({ markup }) => markup).join('')
-        + transactionConfirmationView(prepared, riskSummary);
-    }
+    stage.innerHTML = reviewStageHeader(
+      'Security review complete',
+      'The transfer is prepared and simulated. Check every field below before choosing whether to open Phantom.',
+    ) + `<div class="review-recipient-checks">${checksMarkup}</div>`
+      + transactionConfirmationView(prepared, riskSummary);
+    focusReviewStage();
   } catch (error) {
-    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress) return;
+    if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
+      || document.getElementById('intent-review-stage') !== stage) return;
     const message = error instanceof TransactionPreparationError
       ? error.message
       : 'The Devnet transaction could not be safely prepared.';
-    const currentTarget = document.getElementById('intent-security-results');
-    if (currentTarget) currentTarget.insertAdjacentHTML('beforeend', transactionPreparationErrorView(message));
+    stage.innerHTML = reviewStageHeader(
+      'Preparation stopped',
+      'The transaction was not prepared and no signature was requested.',
+    ) + (checksMarkup ? `<div class="review-recipient-checks">${checksMarkup}</div>` : '')
+      + transactionPreparationErrorView(message);
+    focusReviewStage();
   } finally {
     button.disabled = false;
     button.removeAttribute('aria-busy');
   }
 }
 
-function cancelPreparedTransfer(button) {
+function editPreparedTransfer() {
   pendingTransfer = null;
-  const confirmation = button.closest('.transaction-confirmation');
-  confirmation?.remove();
-  showToast('Prepared transaction cancelled. No wallet request was made.');
+  const stage = document.getElementById('intent-review-stage');
+  const hadReview = Boolean(stage?.innerHTML.trim());
+  if (stage) stage.innerHTML = '';
+  focusCopilotPrompt();
+  if (hadReview) showToast('Review cleared. Edit the request and interpret it again.');
+}
+
+function requestCancelTransfer(button) {
+  const dialog = button.closest('.transaction-confirmation')?.querySelector('[data-cancel-dialog]');
+  if (typeof dialog?.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    confirmCancelTransfer(button);
+  }
+}
+
+function dismissCancelDialog(button) {
+  button.closest('[data-cancel-dialog]')?.close();
+}
+
+function confirmCancelTransfer(button) {
+  pendingTransfer = null;
+  button.closest('[data-cancel-dialog]')?.close();
+  const stage = document.getElementById('intent-review-stage');
+  if (stage) stage.innerHTML = '';
+  showToast('Prepared transaction discarded. No wallet request was made.');
 }
 
 async function approvePreparedTransfer(button) {
@@ -423,11 +670,27 @@ async function approvePreparedTransfer(button) {
     return;
   }
 
-  const resultElement = button.closest('.transaction-confirmation')?.querySelector('#transaction-execution-result');
+  const confirmation = button.closest('.transaction-confirmation');
+  const resultElement = confirmation?.querySelector('#transaction-execution-result');
   if (!resultElement) return;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
-  resultElement.innerHTML = '<div class="inspection-loading" role="status"><span class="inspection-spinner" aria-hidden="true"></span><strong>Waiting for explicit Phantom approval</strong><span>Check the transaction details in Phantom. Rejection will not submit anything.</span></div>';
+  confirmation.querySelectorAll('[data-action="request-cancel-transfer"], [data-action="edit-transfer"]').forEach((control) => {
+    control.disabled = true;
+  });
+  const executionProgress = {
+    status: 'preparing',
+    awaiting: false,
+    submitted: false,
+    confirming: false,
+    failureStage: null,
+    signature: null,
+    message: null,
+  };
+  const renderExecutionProgress = () => {
+    resultElement.innerHTML = transactionExecutionProgressView(executionProgress, pending.prepared.preview);
+  };
+  renderExecutionProgress();
 
   let sessionTransactionId;
   try {
@@ -438,9 +701,22 @@ async function approvePreparedTransfer(button) {
     const result = await executePreparedTransfer(pending.prepared, {
       signTransaction: (transaction) => phantomWallet.signTransaction(transaction, pending.payerAddress),
       connection: getDevnetConnection(),
+      onProgress: (event) => {
+        if (event.status === 'awaiting_approval') executionProgress.awaiting = true;
+        if (['submitted', 'confirming', 'confirmed'].includes(event.status)) executionProgress.submitted = true;
+        if (event.status === 'confirming') executionProgress.confirming = true;
+        if (event.stage) executionProgress.failureStage = event.stage;
+        if (event.signature) executionProgress.signature = event.signature;
+        if (event.message) executionProgress.message = event.message;
+        executionProgress.status = event.status;
+        renderExecutionProgress();
+      },
     });
     updateSessionTransaction(sessionTransactionId, result);
     resultElement.innerHTML = transactionExecutionView(result, pending.prepared.preview);
+    confirmation.classList.add('is-complete');
+    const actionBar = confirmation.querySelector('[data-review-actions]');
+    if (actionBar) actionBar.hidden = true;
     pendingTransfer = null;
     if (result.status === 'confirmed') {
       showToast('The transaction was confirmed on Solana Devnet.', 'success');
@@ -464,8 +740,22 @@ async function approvePreparedTransfer(button) {
       errorCode: code,
       memoVerification: 'unavailable',
     };
+    const failureStage = executionProgress.failureStage
+      ?? (rejected
+        ? 'approval'
+        : code === 'SUBMISSION_FAILED'
+          ? 'submitted'
+          : executionProgress.submitted
+            ? 'confirmation'
+            : executionProgress.awaiting ? 'approval' : 'preparing');
+    executionProgress.status = rejected ? 'rejected' : 'failed';
+    executionProgress.failureStage = failureStage;
+    executionProgress.message = error.message;
     if (sessionTransactionId !== undefined) updateSessionTransaction(sessionTransactionId, result);
     resultElement.innerHTML = transactionExecutionView(result, pending.prepared.preview);
+    confirmation.classList.add('is-complete');
+    const actionBar = confirmation.querySelector('[data-review-actions]');
+    if (actionBar) actionBar.hidden = true;
     pendingTransfer = null;
     showToast(rejected ? 'Phantom signing was rejected. No transaction was submitted.' : error.message, 'warning');
   } finally {
@@ -493,12 +783,7 @@ async function handleAddressSubmit(form) {
   submitButton.setAttribute('aria-busy', 'true');
   submitButton.innerHTML = `${icon('scan')}<span>Inspecting…</span>`;
   if (inspectionMeta) inspectionMeta.textContent = 'INSPECTING DEVNET';
-  target.innerHTML = `
-    <div class="inspection-loading" role="status" aria-live="polite">
-      <span class="inspection-spinner" aria-hidden="true"></span>
-      <strong>Inspecting Devnet account</strong>
-      <span>Querying balance, account metadata, and recent signatures.</span>
-    </div>`;
+  target.innerHTML = walletInspectionLoading(kind === 'xray' ? 'xray' : 'scanner');
   const feedback = form.querySelector('[data-feedback]');
   if (feedback) {
     feedback.textContent = '';
@@ -507,14 +792,21 @@ async function handleAddressSubmit(form) {
 
   try {
     const report = await inspectWalletSecurity(address);
+    recordWalletScan(
+      report,
+      kind === 'scanner' ? 'Security Scanner' : kind === 'xray' ? 'Wallet X-Ray' : 'Dashboard scan',
+    );
     const currentTarget = document.getElementById(targetId);
     if (currentTarget) {
-      currentTarget.innerHTML = walletInspectionView(report, { compact: kind === 'dashboard-scan' });
+      currentTarget.innerHTML = walletInspectionView(report, {
+        compact: kind === 'dashboard-scan',
+        mode: kind === 'xray' ? 'xray' : 'scanner',
+      });
     }
     if (inspectionMeta) {
       inspectionMeta.textContent = report.riskAssessment.status === 'unavailable'
         ? 'UNVERIFIED'
-        : 'DEVNET DATA LOADED';
+        : `${report.riskAssessment.category.toUpperCase()} RISK · DEVNET`;
     }
     if (report.riskAssessment.status === 'unavailable' && feedback) {
       setFeedback(form, 'Some required Devnet reads failed. This result is unverified, not low risk.', 'warning');
@@ -534,20 +826,34 @@ async function handleAddressSubmit(form) {
   }
 }
 
+function updateHistorySummary(transactions) {
+  const total = document.getElementById('history-total');
+  const confirmed = document.getElementById('history-confirmed');
+  const attention = document.getElementById('history-attention');
+  if (!total && !confirmed && !attention) return;
+  const confirmedCount = transactions.filter(({ status }) => status === 'confirmed').length;
+  const attentionCount = transactions.filter(({ status }) => (
+    ['pending', 'submitted', 'failed', 'rejected'].includes(status)
+  )).length;
+  if (total) total.textContent = String(transactions.length);
+  if (confirmed) confirmed.textContent = String(confirmedCount);
+  if (attention) attention.textContent = String(attentionCount);
+}
+
 function renderSessionActivity() {
   const transactions = getSessionTransactions();
   const search = document.querySelector('#history-search')?.value ?? '';
   const status = document.querySelector('#history-status')?.value ?? 'all';
   document.querySelectorAll('.activity-table tbody').forEach((body) => {
+    const overview = body.closest('.table-wrap')?.dataset.activityVariant === 'overview';
     body.innerHTML = activityRows(
       transactions,
-      body.closest('.table-wrap')?.classList.contains('table-wrap--compact')
-        ? {}
-        : { search, status },
+      overview ? { variant: 'overview' } : { search, status },
     );
   });
   const count = document.querySelector('.history-count');
   if (count) count.textContent = `${transactions.length} record${transactions.length === 1 ? '' : 's'}`;
+  updateHistorySummary(transactions);
 }
 
 function updateHistoryEmptyState() {
@@ -557,11 +863,40 @@ function updateHistoryEmptyState() {
   renderSessionActivity();
 }
 
+function clearHistoryFilters() {
+  const search = document.querySelector('#history-search');
+  const status = document.querySelector('#history-status');
+  if (search) search.value = '';
+  if (status) status.value = 'all';
+  renderSessionActivity();
+  search?.focus();
+  showToast('Session history filters cleared.');
+}
+
 function onClick(event) {
   const viewTarget = event.target.closest('[data-view]');
   if (viewTarget) {
     event.preventDefault();
+    const starterPrompt = viewTarget.dataset.starterPrompt;
+    const focusTarget = viewTarget.dataset.focusTarget;
     renderView(viewTarget.dataset.view, { focus: true });
+    if (starterPrompt) {
+      const prompt = document.querySelector('#copilot-prompt');
+      if (prompt) {
+        prompt.value = starterPrompt;
+        prompt.focus();
+        prompt.setSelectionRange(starterPrompt.length, starterPrompt.length);
+        updateCopilotCharCount();
+      }
+    } else if (focusTarget) {
+      document.querySelector(focusTarget)?.focus();
+    }
+    return;
+  }
+
+  const tab = event.target.closest('[data-tab-target]');
+  if (tab) {
+    activateTab(tab);
     return;
   }
 
@@ -571,6 +906,7 @@ function onClick(event) {
     if (prompt) {
       prompt.value = example.dataset.example;
       prompt.focus();
+      updateCopilotCharCount();
       const feedback = document.querySelector('[data-feedback="copilot"]');
       if (feedback) {
         feedback.textContent = '';
@@ -581,11 +917,33 @@ function onClick(event) {
   }
 
   const action = event.target.closest('[data-action]')?.dataset.action;
-  if (action === 'scan-intent-recipients') {
+  if (action === 'close-sidebar') {
+    setSidebarOpen(false, { restoreFocus: true });
+    return;
+  }
+
+  if (action === 'set-theme') {
+    const control = event.target.closest('[data-theme-value]');
+    if (!control) return;
+    const result = setThemePreference(control.dataset.themeValue);
+    if (result) showToast(`Appearance: ${THEME_LABELS[result.preference]}.`, 'info');
+  } else if (action === 'copy-value') {
+    const control = event.target.closest('[data-copy-value]');
+    if (control) void copyText(control.dataset.copyValue, control.dataset.copyLabel || 'Value');
+  } else if (action === 'scan-intent-recipients') {
     const button = event.target.closest('[data-action="scan-intent-recipients"]');
     if (button) void scanIntentRecipients(button);
-  } else if (action === 'cancel-transfer') {
-    cancelPreparedTransfer(event.target.closest('[data-action="cancel-transfer"]'));
+  } else if (action === 'edit-transfer') {
+    editPreparedTransfer();
+  } else if (action === 'request-cancel-transfer') {
+    const button = event.target.closest('[data-action="request-cancel-transfer"]');
+    if (button) requestCancelTransfer(button);
+  } else if (action === 'dismiss-cancel-transfer') {
+    const button = event.target.closest('[data-action="dismiss-cancel-transfer"]');
+    if (button) dismissCancelDialog(button);
+  } else if (action === 'confirm-cancel-transfer') {
+    const button = event.target.closest('[data-action="confirm-cancel-transfer"]');
+    if (button) confirmCancelTransfer(button);
   } else if (action === 'approve-transfer') {
     const button = event.target.closest('[data-action="approve-transfer"]');
     if (button) void approvePreparedTransfer(button);
@@ -600,11 +958,19 @@ function onClick(event) {
   } else if (action === 'refresh-history') {
     renderSessionActivity();
     showToast('Displayed transactions initiated in this application session only.');
+  } else if (action === 'clear-history-filters') {
+    clearHistoryFilters();
   } else if (action === 'refresh-balance') {
     if (!walletState.address) {
       showToast('Connect Phantom before refreshing your Devnet balance.', 'warning');
     } else {
       void refreshBalance({ notifyError: true });
+    }
+  } else if (action === 'copy-wallet-address') {
+    if (!walletState.address) {
+      showToast('Connect Phantom before copying a wallet address.', 'warning');
+    } else {
+      void copyWalletAddress();
     }
   }
 }
@@ -626,16 +992,41 @@ export function mountApp() {
     element.innerHTML = icon(element.dataset.icon);
   });
 
+  initTheme();
+  initSidebar();
+
   document.addEventListener('click', onClick);
   document.addEventListener('submit', onSubmit);
-  document.querySelector('#menu-toggle').addEventListener('click', (event) => {
-    const sidebar = document.querySelector('#app-sidebar');
-    const isOpen = sidebar.classList.toggle('is-open');
-    event.currentTarget.setAttribute('aria-expanded', String(isOpen));
-    event.currentTarget.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+  document.querySelector('#menu-toggle').addEventListener('click', () => {
+    const isOpen = document.querySelector('#app-sidebar').classList.contains('is-open');
+    setSidebarOpen(!isOpen, { moveFocus: !isOpen });
   });
+  document.addEventListener('keydown', (event) => {
+    const tab = event.target.closest('[data-tab-target]');
+    if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      const tabs = [...tab.closest('[role="tablist"]')?.querySelectorAll('[data-tab-target]') ?? []];
+      if (tabs.length === 0) return;
+      event.preventDefault();
+      const currentIndex = tabs.indexOf(tab);
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[nextIndex].focus();
+      activateTab(tabs[nextIndex]);
+      return;
+    }
+    if (event.key !== 'Escape') return;
+    if (!document.querySelector('#app-sidebar').classList.contains('is-open')) return;
+    event.preventDefault();
+    setSidebarOpen(false, { restoreFocus: true });
+  });
+  window.addEventListener('resize', syncSidebarViewport);
+  mobileSidebarQuery.addEventListener('change', syncSidebarViewport);
   document.addEventListener('input', (event) => {
     if (event.target.matches('#history-search, #history-status')) updateHistoryEmptyState();
+    if (event.target.matches('#copilot-prompt')) updateCopilotCharCount();
   });
   document.addEventListener('change', (event) => {
     if (event.target.matches('[data-risk-acknowledgement]')) {
@@ -673,6 +1064,7 @@ export function mountApp() {
   });
 
   renderView(window.location.hash.slice(1) || 'dashboard', { updateHistory: false });
+  syncSidebarViewport();
   void phantomWallet.restore().catch((error) => {
     showToast(error instanceof PhantomWalletError ? error.message : 'Could not restore the Phantom connection.', 'warning');
   });

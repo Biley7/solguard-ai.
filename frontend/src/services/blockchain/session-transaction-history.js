@@ -8,12 +8,16 @@ const SESSION_STATUSES = new Set([
   'failed',
   'rejected',
 ]);
+const RISK_CATEGORIES = new Set(['low', 'moderate', 'high', 'critical']);
 
 export function recordSessionTransaction(preview, riskSummary, startedAt = new Date().toISOString()) {
   if (!preview || !Array.isArray(preview.recipients) || !riskSummary) {
     throw new TypeError('A reviewed transaction preview and risk summary are required.');
   }
 
+  const riskCategory = RISK_CATEGORIES.has(riskSummary.category)
+    ? riskSummary.category
+    : null;
   const entry = {
     id: nextId++,
     timestamp: startedAt,
@@ -21,6 +25,8 @@ export function recordSessionTransaction(preview, riskSummary, startedAt = new D
     recipients: preview.recipients.map(({ address, amountLamports }) => ({ address, amountLamports })),
     totalLamports: preview.totalLamports,
     riskScore: Number.isInteger(riskSummary.score) ? riskSummary.score : null,
+    riskCategory,
+    riskStatus: riskSummary.status === 'assessed' && riskCategory ? 'assessed' : 'unavailable',
     status: 'pending',
     signature: null,
     explorerUrl: null,

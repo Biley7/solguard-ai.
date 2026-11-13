@@ -40,6 +40,15 @@ function delay(milliseconds) {
   return { promise, clear: () => clearTimeout(timer) };
 }
 
+function reportProgress(onProgress, status, details = {}) {
+  if (typeof onProgress !== 'function') return;
+  try {
+    onProgress({ status, ...details });
+  } catch {
+    // Presentation progress must never interrupt the transaction security flow.
+  }
+}
+
 async function verifyOnChainMemo(connection, signature, expectedMemo) {
   let transaction;
   try {
@@ -65,6 +74,7 @@ export async function executePreparedTransfer(prepared, {
   signTransaction,
   connection = getDevnetConnection(),
   timeoutMs = TRANSACTION_CONFIRMATION_TIMEOUT_MS,
+  onProgress = null,
 } = {}) {
   if (!prepared?.transaction || typeof signTransaction !== 'function') {
     throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'A prepared transaction and Phantom signer are required.');
@@ -78,6 +88,8 @@ export async function executePreparedTransfer(prepared, {
   ) {
     throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'The prepared transaction no longer matches its reviewed Devnet preview.');
   }
+
+  reportProgress(onProgress, 'preparing');
 
   try {
     const [currentBlockHeight, currentBalance] = await Promise.all([
@@ -100,6 +112,7 @@ export async function executePreparedTransfer(prepared, {
       );
     }
   } catch (error) {
+    reportProgress(onProgress, 'failed', { stage: 'preparing', message: error?.message });
     if (error instanceof TransactionExecutionError) throw error;
     throw new TransactionExecutionError(
       'RPC_ERROR',
@@ -120,6 +133,7 @@ export async function executePreparedTransfer(prepared, {
       );
     }
   } catch (error) {
+    reportProgress(onProgress, 'failed', { stage: 'preparing', message: error?.message });
     if (error instanceof TransactionExecutionError) throw error;
     throw new TransactionExecutionError(
       'SIMULATION_UNAVAILABLE',
@@ -127,6 +141,8 @@ export async function executePreparedTransfer(prepared, {
       { cause: error },
     );
   }
+
+  reportProgress(onProgress, 'awaiting_approval');
 
   let signedTransaction;
   try {
@@ -140,8 +156,10 @@ export async function executePreparedTransfer(prepared, {
       || error?.code === 'USER_REJECTED'
       || /reject|declin|cancel/i.test(error?.message ?? '')
     ) {
+      reportProgress(onProgress, 'rejected', { stage: 'approval' });
       throw new TransactionExecutionError('USER_REJECTED', 'The Phantom signing request was rejected.', { cause: error });
     }
+    reportProgress(onProgress, 'failed', { stage: 'approval', message: error?.message });
     throw new TransactionExecutionError(
       'SIGNING_FAILED',
       'Phantom could not sign the transaction. No Devnet submission was made.',
@@ -150,6 +168,7 @@ export async function executePreparedTransfer(prepared, {
   }
 
   if (!sameBytes(prepared.transaction.serializeMessage(), signedTransaction.serializeMessage())) {
+    reportProgress(onProgress, 'failed', { stage: 'approval' });
     throw new TransactionExecutionError(
       'TRANSACTION_MODIFIED',
       'The signed transaction message differs from the reviewed transaction. It was not submitted.',
@@ -160,6 +179,7 @@ export async function executePreparedTransfer(prepared, {
   try {
     rawTransaction = signedTransaction.serialize({ requireAllSignatures: true, verifySignatures: true });
   } catch (error) {
+    reportProgress(onProgress, 'failed', { stage: 'approval' });
     throw new TransactionExecutionError(
       'INVALID_WALLET_SIGNATURE',
       'The Phantom signature could not be verified. No Devnet submission was made.',
@@ -175,6 +195,7 @@ export async function executePreparedTransfer(prepared, {
       maxRetries: 3,
     });
   } catch (error) {
+    reportProgress(onProgress, 'failed', { stage: 'submitted', message: error?.message });
     if (/insufficient funds/i.test(error?.message ?? '')) {
       throw new TransactionExecutionError('INSUFFICIENT_FUNDS', 'Devnet rejected the transaction because the sender balance is insufficient.', { cause: error });
     }
@@ -183,6 +204,9 @@ export async function executePreparedTransfer(prepared, {
     }
     throw new TransactionExecutionError('SUBMISSION_FAILED', 'Devnet did not accept the signed transaction.', { cause: error });
   }
+
+  reportProgress(onProgress, 'submitted', { signature });
+  reportProgress(onProgress, 'confirming', { signature });
 
   const confirmation = delay(timeoutMs);
   try {
@@ -205,6 +229,7 @@ export async function executePreparedTransfer(prepared, {
       };
     }
     if (result?.value?.err) {
+      reportProgress(onProgress, 'failed', { stage: 'confirmation', signature });
       return {
         status: 'failed',
         signature,
@@ -219,6 +244,7 @@ export async function executePreparedTransfer(prepared, {
       signature,
       prepared.preview.memoText,
     );
+    reportProgress(onProgress, 'confirmed', { signature });
     return {
       status: 'confirmed',
       signature,

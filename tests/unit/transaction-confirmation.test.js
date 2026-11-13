@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { transactionConfirmationView, transactionExecutionView } from '../../frontend/src/components/transaction-confirmation.js';
+import {
+  transactionConfirmationView,
+  transactionExecutionProgressView,
+  transactionExecutionView,
+} from '../../frontend/src/components/transaction-confirmation.js';
 
 const prepared = {
   preview: {
@@ -29,6 +33,33 @@ test('keeps high-risk warning visible and requires explicit acknowledgement befo
   assert.match(markup, /data-action="approve-transfer" disabled/);
   assert.match(markup, /SOLANA DEVNET/);
   assert.match(markup, /SolGuard-generated heuristic record/);
+});
+
+test('renders the actual lifecycle state and marks the step that failed', () => {
+  const confirming = transactionExecutionProgressView({
+    status: 'confirming',
+    awaiting: true,
+    submitted: true,
+    signature: 'devnet-signature',
+  }, prepared.preview);
+  assert.match(confirming, /data-execution-status="confirming"/);
+  assert.match(confirming, /role="status" aria-live="polite"/);
+  assert.match(confirming, /Confirming on Devnet/);
+  assert.match(confirming, /explorer\.solana\.com\/tx\/devnet-signature/);
+  assert.match(confirming, /execution-step is-done/);
+  assert.match(confirming, /execution-step is-active/);
+
+  const failed = transactionExecutionProgressView({
+    status: 'failed',
+    awaiting: true,
+    submitted: false,
+    failureStage: 'approval',
+    message: 'Phantom could not sign the transaction.',
+  }, prepared.preview);
+  assert.match(failed, /data-execution-status="failed"/);
+  assert.match(failed, /Approval failed/);
+  assert.match(failed, /Phantom could not sign the transaction\./);
+  assert.doesNotMatch(failed, /data-execution-status="confirmed"/);
 });
 
 test('shows memo verification as distinct from transaction confirmation', () => {
