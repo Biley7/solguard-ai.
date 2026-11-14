@@ -6,14 +6,14 @@ export function xrayPage() {
     ${pageHeading(
       'PUBLIC-DATA INVESTIGATION',
       'Wallet X-Ray',
-      'Examine any Solana address as a case file: account facts, recent activity, evidence gaps, and Explorer references in one investigative view.',
+      'Examine any address on Devnet as a case file: account facts, recent activity, evidence gaps, and Explorer references in one investigative view.',
       '<span class="feature-mode feature-mode--muted"><span class="feature-mode-dot"></span>READ-ONLY</span>',
     )}
 
     <section class="panel xray-search-band" aria-labelledby="xray-search-title">
       <div class="xray-search-intro">
         <span class="xray-search-mark">${icon('search')}</span>
-        <div><span class="eyebrow">OPEN A CASE</span><h2 id="xray-search-title">Investigate a wallet address</h2><p>Public on-chain metadata only. X-Ray never connects to the address being investigated or authorizes a transfer.</p></div>
+        <div><span class="eyebrow">OPEN A CASE</span><h2 id="xray-search-title">Investigate a wallet address</h2><p>Public Devnet metadata only. X-Ray never connects to the address being investigated or authorizes a transfer.</p></div>
       </div>
       <form class="address-form xray-form" data-form="xray" novalidate>
         <label class="field-label" for="xray-address">Solana public address</label>

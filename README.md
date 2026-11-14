@@ -78,3 +78,4 @@ Deploy the Vite frontend as a static site and the Express backend as a Node.js s
 - [API contracts](docs/API_CONTRACTS.md)
 - [Data models](docs/DATA_MODELS.md)
 - [Security design](docs/SECURITY_DESIGN.md)
+- [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

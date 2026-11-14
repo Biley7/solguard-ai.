@@ -506,6 +506,8 @@
 .search-control input {
   width: 100%;
   min-width: 0;
+  align-self: stretch;
+  padding: 0;
   border: 0;
   outline: none;
   background: transparent;
@@ -558,7 +560,10 @@
 
 .select-control select {
   min-width: 110px;
+  min-height: 100%;
+  align-self: stretch;
   appearance: none;
+  padding: 0;
   border: 0;
   outline: none;
   background: transparent;

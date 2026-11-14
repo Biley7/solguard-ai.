@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js';
 import { dashboardPage } from './pages/dashboard.js';
 import { copilotPage } from './pages/copilot.js';
 import { scannerPage } from './pages/scanner.js';
@@ -46,7 +47,7 @@ import { recordWalletScan } from './services/security/scan-history.js';
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
   copilot: { label: 'AI Copilot', render: copilotPage },
-  scanner: { label: 'Wallet Scanner', render: scannerPage },
+  scanner: { label: 'Security Scanner', render: scannerPage },
   xray: { label: 'Wallet X-Ray', render: xrayPage },
   history: { label: 'Transaction History', render: historyPage },
   settings: { label: 'Settings', render: settingsPage },
@@ -335,6 +336,34 @@ function syncSidebarViewport() {
   }
 }
 
+function trapSidebarFocus(event) {
+  if (event.key !== 'Tab' || !mobileSidebarQuery.matches) return false;
+  const sidebar = document.querySelector('#app-sidebar');
+  if (!sidebar?.classList.contains('is-open')) return false;
+
+  const focusable = [...sidebar.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => {
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+  if (focusable.length === 0) return false;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const activeInSidebar = sidebar.contains(document.activeElement);
+  if (event.shiftKey && (!activeInSidebar || document.activeElement === first)) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!event.shiftKey && (!activeInSidebar || document.activeElement === last)) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
 function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   const view = views[viewName] ? viewName : 'dashboard';
   currentIntentResponse = null;
@@ -362,6 +391,7 @@ function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   updateCopilotCharCount();
 
   if (updateHistory) window.history.pushState({ view }, '', `#${view}`);
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   if (focus) content.focus({ preventScroll: true });
 }
 
@@ -765,9 +795,28 @@ async function approvePreparedTransfer(button) {
   }
 }
 
+function isCanonicalAddress(value) {
+  try {
+    const publicKey = new PublicKey(value);
+    return publicKey.toBase58() === value;
+  } catch {
+    return false;
+  }
+}
+
 async function handleAddressSubmit(form) {
   const kind = form.dataset.form;
   const address = form.elements.address.value.trim();
+  const feedback = form.querySelector('[data-feedback]');
+
+  if (!isCanonicalAddress(address)) {
+    form.elements.address.setAttribute('aria-invalid', 'true');
+    if (feedback) setFeedback(form, 'Enter a valid canonical Solana public address.', 'warning');
+    form.elements.address.focus();
+    return;
+  }
+
+  form.elements.address.removeAttribute('aria-invalid');
   const targetId = {
     scanner: 'scanner-result',
     xray: 'xray-result',
@@ -784,7 +833,6 @@ async function handleAddressSubmit(form) {
   submitButton.innerHTML = `${icon('scan')}<span>Inspecting…</span>`;
   if (inspectionMeta) inspectionMeta.textContent = 'INSPECTING DEVNET';
   target.innerHTML = walletInspectionLoading(kind === 'xray' ? 'xray' : 'scanner');
-  const feedback = form.querySelector('[data-feedback]');
   if (feedback) {
     feedback.textContent = '';
     feedback.className = 'form-feedback';
@@ -874,6 +922,13 @@ function clearHistoryFilters() {
 }
 
 function onClick(event) {
+  const skipLink = event.target.closest('[data-action="skip-to-content"]');
+  if (skipLink) {
+    event.preventDefault();
+    document.querySelector('#app-content')?.focus();
+    return;
+  }
+
   const viewTarget = event.target.closest('[data-view]');
   if (viewTarget) {
     event.preventDefault();
@@ -1002,6 +1057,7 @@ export function mountApp() {
     setSidebarOpen(!isOpen, { moveFocus: !isOpen });
   });
   document.addEventListener('keydown', (event) => {
+    if (trapSidebarFocus(event)) return;
     const tab = event.target.closest('[data-tab-target]');
     if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       const tabs = [...tab.closest('[role="tablist"]')?.querySelectorAll('[data-tab-target]') ?? []];

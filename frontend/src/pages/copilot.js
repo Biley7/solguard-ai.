@@ -7,7 +7,7 @@ export function copilotPage() {
     ${pageHeading(
       'TRANSFER WORKSPACE',
       'AI Copilot',
-      'Describe a transfer in plain language. SolGuard interprets and validates it; nothing is authorized until you review and approve in Phantom.',
+      'Describe a Devnet transfer in plain language. SolGuard interprets and validates it; nothing is authorized until you review and approve in Phantom.',
       '<span class="feature-mode"><span class="feature-mode-dot"></span>REVIEW REQUIRED</span>',
     )}
 

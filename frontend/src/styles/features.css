@@ -3433,6 +3433,15 @@
 }
 
 @media (max-width: 560px) {
+  .feature-panel-head {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .feature-panel-head .feature-panel-meta {
+    flex-basis: 100%;
+  }
+
   .page-heading-actions {
     padding-top: var(--space-2);
   }

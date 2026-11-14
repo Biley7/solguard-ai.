@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#090d16" />
     <meta
       name="description"
       content="SolGuard AI command center for reviewing Solana Devnet activity and transfer intent."
@@ -49,9 +50,10 @@
     <title>Command Center | SolGuard AI</title>
   </head>
   <body>
+    <a class="skip-link" href="#app-content" data-action="skip-to-content">Skip to main content</a>
     <div class="app-shell">
       <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
-        <a class="brand" href="#command-center" data-view="dashboard" aria-label="SolGuard AI command center">
+        <a class="brand" href="#dashboard" data-view="dashboard" aria-label="SolGuard AI command center">
           <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
           <span class="brand-copy">
             <strong>SolGuard</strong>
@@ -102,7 +104,7 @@
           </button>
           <div class="topbar-context">
             <span class="context-label">SOLANA SECURITY</span>
-            <span class="context-divider">/</span>
+            <span class="context-divider" aria-hidden="true">/</span>
             <span class="context-page" id="current-page-label">Command Center</span>
           </div>
           <div class="topbar-actions">
@@ -122,8 +124,8 @@
             <span class="topbar-divider"></span>
             <button type="button" class="wallet-connect" data-action="connect-wallet">
               <span class="wallet-indicator"></span>
+              <span class="wallet-icon" data-icon="wallet" aria-hidden="true"></span>
               <span data-wallet-label>Connect Phantom</span>
-              <span data-icon="chevron-down"></span>
             </button>
             <button type="button" class="wallet-disconnect" data-action="disconnect-wallet" hidden>Disconnect</button>
             <button class="icon-button topbar-settings" type="button" data-view="settings" aria-label="Open settings" title="Settings">
