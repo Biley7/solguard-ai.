@@ -46,6 +46,8 @@ The `status` field is one of `ready`, `clarification`, or `unsupported`.
 
 Every response includes `status`, `source`, `fallbackReason`, `intent`, `distribution`, `totalLamports`, `memo`, `explanation`, `missingInformation`, `clarificationQuestion`, and `validationErrors`. Fields not applicable to a status are `null` or empty arrays/strings.
 
+The optional `memo` is a user-requested label returned for review only. It is not written into the Solana transaction. The transaction carries a separate SolGuard-generated heuristic provenance memo; that memo is not a certification or a safety guarantee.
+
 ### Error response
 
 All API errors use a safe envelope:

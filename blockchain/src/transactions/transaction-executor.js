@@ -1,4 +1,9 @@
-import { PublicKey, Transaction } from '@solana/web3.js';
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import { getDevnetConnection } from '../rpc/devnet-connection.js';
 import { SOLANA_COMMITMENT } from '../config/network.js';
 import { MEMO_PROGRAM_ADDRESS } from './transaction-builder.js';
@@ -16,6 +21,172 @@ export class TransactionExecutionError extends Error {
 
 function explorerUrl(signature) {
   return `https://explorer.solana.com/tx/${encodeURIComponent(signature)}?cluster=devnet`;
+}
+
+const MAX_U64 = (1n << 64n) - 1n;
+
+function canonicalPublicKey(address, field) {
+  try {
+    const publicKey = new PublicKey(address);
+    if (publicKey.toBase58() !== address) throw new Error('Public key is not canonical.');
+    return publicKey;
+  } catch (error) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      `The reviewed ${field} address is invalid.`,
+      { cause: error },
+    );
+  }
+}
+
+function positiveLamports(value, field) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      `The reviewed ${field} is invalid.`,
+    );
+  }
+  const amount = BigInt(value);
+  if (amount <= 0n || amount > MAX_U64) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      `The reviewed ${field} is outside the supported range.`,
+    );
+  }
+  return amount;
+}
+
+/**
+ * Rebuild the transaction from the reviewed preview, independently of the
+ * mutable transaction object that was returned by the builder. The resulting
+ * message is the only transaction that may be simulated and presented to
+ * Phantom for signing.
+ */
+function buildReviewedTransaction(prepared) {
+  const preview = prepared?.preview;
+  if (!preview || preview.network !== 'devnet') {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The prepared transaction does not have a reviewed Devnet preview.',
+    );
+  }
+
+  const payer = canonicalPublicKey(preview.payerAddress, 'sender');
+  if (!Array.isArray(preview.recipients) || preview.recipients.length < 1 || preview.recipients.length > 5) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed recipient list is invalid.',
+    );
+  }
+
+  const recipients = preview.recipients.map((recipient, index) => {
+    if (!recipient || typeof recipient !== 'object') {
+      throw new TransactionExecutionError(
+        'INVALID_EXECUTION_REQUEST',
+        'The reviewed recipient list is invalid.',
+      );
+    }
+    const publicKey = canonicalPublicKey(recipient.address, `recipient ${index + 1}`);
+    const amountLamports = positiveLamports(
+      recipient.amountLamports,
+      `recipient ${index + 1} amount`,
+    );
+    return { address: recipient.address, publicKey, amountLamports };
+  });
+
+  if (new Set(recipients.map(({ address }) => address)).size !== recipients.length) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed recipient list contains duplicate addresses.',
+    );
+  }
+  if (recipients.some(({ publicKey }) => publicKey.equals(payer))) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed transaction cannot pay the sender.',
+    );
+  }
+
+  const totalLamports = recipients.reduce(
+    (total, recipient) => total + recipient.amountLamports,
+    0n,
+  );
+  if (totalLamports > MAX_U64 || preview.totalLamports !== totalLamports.toString()) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed total does not match the reviewed recipient amounts.',
+    );
+  }
+  if (typeof preview.feeLamports !== 'string' || !/^[0-9]+$/.test(preview.feeLamports)) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed transaction fee is invalid.',
+    );
+  }
+  if (
+    typeof preview.memoText !== 'string'
+    || new TextEncoder().encode(preview.memoText).length > 566
+  ) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed provenance memo is invalid.',
+    );
+  }
+  if (typeof prepared.blockhash !== 'string' || !prepared.blockhash) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed blockhash is missing.',
+    );
+  }
+  if (!Number.isSafeInteger(prepared.lastValidBlockHeight) || prepared.lastValidBlockHeight < 0) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The reviewed blockhash expiry is invalid.',
+    );
+  }
+
+  const reviewedTransaction = new Transaction({
+    feePayer: payer,
+    recentBlockhash: prepared.blockhash,
+  });
+  for (const recipient of recipients) {
+    reviewedTransaction.add(SystemProgram.transfer({
+      fromPubkey: payer,
+      toPubkey: recipient.publicKey,
+      lamports: recipient.amountLamports,
+    }));
+  }
+  reviewedTransaction.add(new TransactionInstruction({
+    keys: [],
+    programId: new PublicKey(MEMO_PROGRAM_ADDRESS),
+    data: new TextEncoder().encode(preview.memoText),
+  }));
+
+  if (!(prepared.transaction instanceof Transaction)) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The prepared transaction is not a Solana transaction.',
+    );
+  }
+  const expectedMessage = reviewedTransaction.serializeMessage();
+  let actualMessage;
+  try {
+    actualMessage = prepared.transaction.serializeMessage();
+  } catch (error) {
+    throw new TransactionExecutionError(
+      'INVALID_EXECUTION_REQUEST',
+      'The prepared transaction could not be serialized for review.',
+      { cause: error },
+    );
+  }
+  if (!sameBytes(expectedMessage, actualMessage)) {
+    throw new TransactionExecutionError(
+      'TRANSACTION_PREVIEW_MISMATCH',
+      'The prepared transaction no longer matches the reviewed preview. Nothing was signed or submitted.',
+    );
+  }
+
+  return { reviewedTransaction, expectedMessage, payer };
 }
 
 function signatureFromSignedTransaction(signedTransaction) {
@@ -79,22 +250,31 @@ export async function executePreparedTransfer(prepared, {
   if (!prepared?.transaction || typeof signTransaction !== 'function') {
     throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'A prepared transaction and Phantom signer are required.');
   }
-
-  if (
-    prepared.transaction.feePayer?.toBase58?.() !== prepared.preview?.payerAddress
-    || prepared.transaction.recentBlockhash !== prepared.blockhash
-    || !Number.isInteger(timeoutMs)
-    || timeoutMs < 1
-  ) {
-    throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'The prepared transaction no longer matches its reviewed Devnet preview.');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+    throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'The confirmation timeout is invalid.');
   }
 
   reportProgress(onProgress, 'preparing');
 
+  let reviewed;
+  try {
+    reviewed = buildReviewedTransaction(prepared);
+  } catch (error) {
+    if (error instanceof TransactionExecutionError) {
+      reportProgress(onProgress, 'failed', { stage: 'preparing', message: error.message });
+    }
+    throw error;
+  }
+  const { reviewedTransaction, expectedMessage } = reviewed;
+  if (prepared.transaction.recentBlockhash !== prepared.blockhash) {
+    reportProgress(onProgress, 'failed', { stage: 'preparing' });
+    throw new TransactionExecutionError('INVALID_EXECUTION_REQUEST', 'The prepared transaction no longer matches its reviewed blockhash.');
+  }
+
   try {
     const [currentBlockHeight, currentBalance] = await Promise.all([
       connection.getBlockHeight(SOLANA_COMMITMENT),
-      connection.getBalance(new PublicKey(prepared.preview.payerAddress), SOLANA_COMMITMENT),
+      connection.getBalance(reviewed.payer, SOLANA_COMMITMENT),
     ]);
     if (BigInt(currentBlockHeight) >= BigInt(prepared.lastValidBlockHeight)) {
       throw new TransactionExecutionError(
@@ -122,7 +302,7 @@ export async function executePreparedTransfer(prepared, {
   }
 
   try {
-    const simulation = await connection.simulateTransaction(prepared.transaction.compileMessage(), {
+    const simulation = await connection.simulateTransaction(reviewedTransaction.compileMessage(), {
       commitment: SOLANA_COMMITMENT,
       replaceRecentBlockhash: true,
     });
@@ -147,7 +327,7 @@ export async function executePreparedTransfer(prepared, {
   let signedTransaction;
   try {
     signedTransaction = signatureFromSignedTransaction(
-      await signTransaction(prepared.transaction),
+      await signTransaction(reviewedTransaction),
     );
   } catch (error) {
     if (error instanceof TransactionExecutionError) throw error;
@@ -167,7 +347,7 @@ export async function executePreparedTransfer(prepared, {
     );
   }
 
-  if (!sameBytes(prepared.transaction.serializeMessage(), signedTransaction.serializeMessage())) {
+  if (!sameBytes(expectedMessage, signedTransaction.serializeMessage())) {
     reportProgress(onProgress, 'failed', { stage: 'approval' });
     throw new TransactionExecutionError(
       'TRANSACTION_MODIFIED',

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   getSessionTransactions,
+  hasUnresolvedSessionTransaction,
   recordSessionTransaction,
   updateSessionTransaction,
 } from '../../frontend/src/services/blockchain/session-transaction-history.js';
@@ -45,6 +46,20 @@ test('exposes defensive copies and rejects unknown transaction updates', () => {
   assert.notEqual(getSessionTransactions()[0].recipients[0].address, 'mutated');
   assert.throws(() => updateSessionTransaction(-1, { status: 'failed' }), /does not exist/);
   assert.throws(() => updateSessionTransaction(getSessionTransactions()[0].id, { status: 'unknown' }), /status is invalid/);
+});
+
+test('surfaces unresolved attempts so a new payout cannot silently duplicate one', () => {
+  const id = recordSessionTransaction(
+    {
+      payerAddress: '11111111111111111111111111111111',
+      recipients: [{ address: 'Vote111111111111111111111111111111111111111', amountLamports: '1' }],
+      totalLamports: '1',
+    },
+    { status: 'assessed', category: 'low', score: 0 },
+  );
+  assert.equal(hasUnresolvedSessionTransaction(), true);
+  updateSessionTransaction(id, { status: 'failed' });
+  assert.equal(hasUnresolvedSessionTransaction(), false);
 });
 
 test('shows filter-specific empty feedback even before the first transaction', () => {

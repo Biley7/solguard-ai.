@@ -99,7 +99,7 @@ export function intentResultView(response) {
         </li>`).join('')}
       </ul>
     </section>
-    ${memoText ? `<div class="intent-memo"><span class="field-label">Audit memo</span><span class="address-inline"><code>${escapeHtml(memoText)}</code>${copyButton(memoText, 'Audit memo')}</span></div>` : ''}
+    ${memoText ? `<div class="intent-memo"><span class="field-label">Requested memo (not written on-chain)</span><span class="address-inline"><code>${escapeHtml(memoText)}</code>${copyButton(memoText, 'Requested memo')}</span></div>` : ''}
     <div class="intent-validation-band">
       <span class="validation-icon">${icon('shield-check')}</span>
       <div><strong>Deterministic validation passed</strong><small>Addresses, amounts, and totals match your request.</small></div>
@@ -127,7 +127,7 @@ export function intentProcessingView() {
     <div class="processing-sequence">
       <span class="processing-sequence-label">REQUEST SEQUENCE</span>
       <ol>
-        <li><span class="processing-sequence-index">01</span><div><strong>Understand intent</strong><small>Extract recipients, amounts, and the audit memo.</small></div></li>
+        <li><span class="processing-sequence-index">01</span><div><strong>Understand intent</strong><small>Extract recipients, amounts, and any requested memo.</small></div></li>
         <li><span class="processing-sequence-index">02</span><div><strong>Validate the request</strong><small>Check addresses, limits, and totals before previewing.</small></div></li>
         <li><span class="processing-sequence-index">03</span><div><strong>Prepare the preview</strong><small>Return a reviewable interpretation. No signature is requested here.</small></div></li>
       </ol>

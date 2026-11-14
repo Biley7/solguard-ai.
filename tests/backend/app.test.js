@@ -24,6 +24,10 @@ test('health endpoint reports API process liveness only', async () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { status: 'ok' });
     assert.ok(response.headers.get('x-request-id'));
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    assert.match(response.headers.get('content-security-policy'), /default-src 'none'/);
   });
 });
 

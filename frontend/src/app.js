@@ -11,6 +11,7 @@ import { createPhantomWallet, PhantomWalletError } from './services/wallet/phant
 import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
 import {
   getSessionTransactions,
+  hasUnresolvedSessionTransaction,
   recordSessionTransaction,
   updateSessionTransaction,
 } from './services/blockchain/session-transaction-history.js';
@@ -524,6 +525,15 @@ async function scanIntentRecipients(button) {
   const stage = document.getElementById('intent-review-stage');
   if (!intent || !stage) return;
 
+  if (hasUnresolvedSessionTransaction()) {
+    stage.innerHTML = reviewStageHeader(
+      'Resolve the previous payout first',
+      'A previous transaction is still pending or has an unknown confirmation state. Check its Devnet Explorer status before preparing another payout. Reloading the page does not prove that the earlier transaction failed.',
+    ) + transactionPreparationErrorView('No new transaction was prepared. Do not retry until the earlier signature is confirmed failed or expired.');
+    focusReviewStage();
+    return;
+  }
+
   if (walletState.status !== 'connected' || !walletState.address) {
     stage.innerHTML = reviewStageHeader(
       'Connect Phantom to prepare the review',
@@ -626,16 +636,16 @@ async function scanIntentRecipients(button) {
     const prepared = await prepareSolTransferTransaction({
       intent,
       payerAddress,
-      riskSummary,
+      recipientReports: results.map(({ report }) => report),
     });
     if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
       || document.getElementById('intent-review-stage') !== stage) return;
-    pendingTransfer = { prepared, riskSummary, payerAddress };
+    pendingTransfer = { prepared, riskSummary: prepared.riskSummary, payerAddress };
     stage.innerHTML = reviewStageHeader(
       'Security review complete',
       'The transfer is prepared and simulated. Check every field below before choosing whether to open Phantom.',
     ) + `<div class="review-recipient-checks">${checksMarkup}</div>`
-      + transactionConfirmationView(prepared, riskSummary);
+      + transactionConfirmationView(prepared, prepared.riskSummary);
     focusReviewStage();
   } catch (error) {
     if (interpretation !== currentIntentResponse || walletState.address !== payerAddress

@@ -27,6 +27,15 @@ test('summarizes the maximum observed recipient score and surfaces high or criti
   assert.equal(critical.highOrCritical, true);
 });
 
+test('treats a category that contradicts its numeric score as unavailable', () => {
+  const result = summarizeTransactionRisk([
+    report('recipient-inconsistent', 'low', 90),
+  ]);
+  assert.equal(result.status, 'unavailable');
+  assert.equal(result.score, null);
+  assert.deepEqual(result.blockedRecipients, ['recipient-inconsistent']);
+});
+
 test('blocks a transaction-level score when any recipient assessment is unavailable', () => {
   const result = summarizeTransactionRisk([
     report('recipient-ok', 'low', 0),

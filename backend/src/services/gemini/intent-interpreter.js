@@ -88,6 +88,49 @@ function promptContains(text, phrase) {
   return text.toLocaleLowerCase().includes(phrase.toLocaleLowerCase());
 }
 
+function explicitAmountPairs(prompt) {
+  const keySource = '[1-9A-HJ-NP-Za-km-z]{32,44}';
+  const amountSource = '(?:\\d+(?:\\.\\d{1,9})?|\\.\\d{1,9})';
+  const pairs = new Map();
+
+  const add = (address, amount) => {
+    if (!pairs.has(address)) pairs.set(address, []);
+    pairs.get(address).push(amount.startsWith('.') ? `0${amount}` : amount);
+  };
+
+  const amountFirst = new RegExp(
+    `(${amountSource})\\s*SOL\\s+(?:to|for)\\s+(${keySource})`,
+    'gi',
+  );
+  for (const match of prompt.matchAll(amountFirst)) add(match[2], match[1]);
+
+  const addressFirst = new RegExp(
+    `(${keySource})\\s+(?:gets|receives|should\\s+get|is\\s+owed)\\s*(${amountSource})\\s*SOL`,
+    'gi',
+  );
+  for (const match of prompt.matchAll(addressFirst)) add(match[1], match[2]);
+
+  return pairs;
+}
+
+function amountIsPairedWithAddress(prompt, address, amountSol) {
+  const amounts = explicitAmountPairs(prompt).get(address);
+  if (!amounts) return false;
+  let expected;
+  try {
+    expected = solAmountToLamports(amountSol, '/recipients/amountSol');
+  } catch {
+    return false;
+  }
+  return amounts.some((amount) => {
+    try {
+      return solAmountToLamports(amount, '/prompt') === expected;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function clarificationResponse(source, question, missingInformation, {
   fallbackReason = null,
   validationErrors = [],
@@ -152,7 +195,7 @@ function validateCandidateGrounding(prompt, candidate) {
     }
     if (
       candidate.distribution !== 'equal'
-      && !amountMatches(recipient.amountSol, mentionedAmounts)
+      && !amountIsPairedWithAddress(prompt, recipient.address, recipient.amountSol)
     ) {
       throw new IntentValidationError('A recipient amount was not present in the prompt.', [
         { field: '/recipients/amountSol', reason: 'amount_not_grounded_in_prompt' },
@@ -438,13 +481,15 @@ async function requestGemini(prompt, { apiKey, model, fetchImpl }) {
   const endpoint = new URL(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
   );
-  endpoint.searchParams.set('key', apiKey);
 
   let response;
   try {
     response = await fetchImpl(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         systemInstruction: {
           parts: [{

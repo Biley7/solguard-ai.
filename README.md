@@ -2,7 +2,7 @@
 
 The Natural-Language Copilot & On-Chain AI Security Firewall for Solana.
 
-The frontend provides a responsive command center with Phantom connection, live Devnet balance, recipient inspection, a Gemini-powered natural-language copilot, and an explicitly approved SOL transfer flow. The backend validates every proposed transfer deterministically and identifies its limited fallback parser when Gemini is unavailable. SOL transfers are scanned, fee-checked, simulated, placed with a compact audit memo in one atomic Devnet transaction, signed by Phantom only after explicit user approval, and submitted through the fixed Devnet RPC. No Mainnet or autonomous-signing path exists.
+The frontend provides a responsive command center with Phantom connection, live Devnet balance, recipient inspection, a Gemini-powered natural-language copilot, and an explicitly approved SOL transfer flow. The backend validates every proposed transfer deterministically and identifies its limited fallback parser when Gemini is unavailable. SOL transfers are scanned, fee-checked, simulated, placed with a compact provenance memo in one atomic Devnet transaction, signed by Phantom only after explicit user approval, and submitted through the fixed Devnet RPC. No Mainnet or autonomous-signing path exists.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint i
 
 Wallet X-Ray is a read-only investigation of the entered public address: balance, account owner/executable metadata, and up to 20 recent Devnet signatures. It cannot establish complete history, account age, beneficial ownership, or whether the wallet is malicious. Risk is heuristic, not a probability or safety guarantee.
 
-Wallet inspection, transaction fee queries, simulation, submission, and memo verification use `https://api.devnet.solana.com`. The app scans all recipients and blocks preparation if any risk assessment is unavailable or any destination is unsupported; high/critical warnings remain visible and require explicit acknowledgement. A successful simulation is not a safety guarantee. All SOL transfers and the SolGuard heuristic audit memo are instructions in the same atomic transaction. Phantom only signs after explicit user approval; the app verifies the signed message is unchanged before broadcasting it to Devnet. After confirmation, SolGuard asks Devnet for the parsed transaction and reports memo verification as verified, not verified, or unavailable; RPC unavailability does not change the reported confirmation result. Transaction history lists only attempts initiated in the open application session; it is not persisted and clears on reload/close. `GET /api/health` reports only local API liveness. AI output is a validated proposal, not authorization or a safety verdict.
+Wallet inspection, transaction fee queries, simulation, submission, and memo verification use `https://api.devnet.solana.com`. The app scans all recipients and blocks preparation if any risk assessment is unavailable or any destination is unsupported; high/critical warnings remain visible and require explicit acknowledgement. A successful simulation is not a safety guarantee. All SOL transfers and the SolGuard heuristic provenance memo are instructions in the same atomic transaction. Phantom only signs after explicit user approval; the app verifies the signed message is unchanged before broadcasting it to Devnet. After confirmation, SolGuard asks Devnet for the parsed transaction and reports memo verification as verified, not verified, or unavailable; RPC unavailability does not change the reported confirmation result. Transaction history lists only attempts initiated in the open application session; it is not persisted and clears on reload/close. `GET /api/health` reports only local API liveness. AI output is a validated proposal, not authorization or a safety verdict.
 
 ## Devnet testing
 
@@ -78,4 +78,5 @@ Deploy the Vite frontend as a static site and the Express backend as a Node.js s
 - [API contracts](docs/API_CONTRACTS.md)
 - [Data models](docs/DATA_MODELS.md)
 - [Security design](docs/SECURITY_DESIGN.md)
+- [Phase 8 security audit and threat model](docs/SECURITY_AUDIT_FINAL.md)
 - [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

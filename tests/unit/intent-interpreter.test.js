@@ -20,10 +20,13 @@ function candidate(overrides = {}) {
   };
 }
 
-function geminiFetch(data) {
-  return async () => new Response(JSON.stringify({
-    candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }],
-  }), { status: 200 });
+function geminiFetch(data, capture = null) {
+  return async (url, options) => {
+    capture?.(url, options);
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }],
+    }), { status: 200 });
+  };
 }
 
 test('uses deterministic fallback for a grounded single transfer when Gemini is not configured', async () => {
@@ -94,6 +97,33 @@ test('Gemini structured output is accepted only when recipient and amounts are g
   ]);
 });
 
+test('does not accept a model that swaps amounts between explicit recipients', async () => {
+  const result = await interpretNaturalLanguage(
+    `Send 1 SOL total: 0.4 SOL to ${firstAddress} and 0.6 SOL to ${secondAddress}.`,
+    {
+      apiKey: 'test-key',
+      fetchImpl: geminiFetch(candidate({
+        distribution: 'explicit',
+        totalAmountSol: '1',
+        recipients: [
+          { address: firstAddress, amountSol: '0.6' },
+          { address: secondAddress, amountSol: '0.4' },
+        ],
+      })),
+    },
+  );
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.source, 'fallback');
+  assert.deepEqual(result.intent.recipients.map(({ address, amountLamports }) => ({
+    address,
+    amountLamports,
+  })), [
+    { address: firstAddress, amountLamports: '400000000' },
+    { address: secondAddress, amountLamports: '600000000' },
+  ]);
+});
+
 test('replaces a Gemini-invented recipient with the grounded fallback result', async () => {
   const result = await interpretNaturalLanguage(
     `Send 0.25 SOL to ${firstAddress}.`,
@@ -153,6 +183,26 @@ test('does not extract an address from inside a longer Base58 token', async () =
 
   assert.equal(result.status, 'clarification');
   assert.ok(result.missingInformation.some((item) => item.includes('address')));
+});
+
+test('sends the Gemini credential in a header, never in the request URL', async () => {
+  let capturedUrl;
+  let capturedOptions;
+  const result = await interpretNaturalLanguage(
+    `Send 0.25 SOL to ${firstAddress}.`,
+    {
+      apiKey: 'test-secret-key',
+      fetchImpl: geminiFetch(candidate(), (url, options) => {
+        capturedUrl = String(url);
+        capturedOptions = options;
+      }),
+    },
+  );
+
+  assert.equal(result.status, 'ready');
+  assert.equal(capturedUrl.includes('test-secret-key'), false);
+  assert.equal(capturedOptions.headers['x-goog-api-key'], 'test-secret-key');
+  assert.equal(capturedOptions.headers['content-type'], 'application/json');
 });
 
 test('falls back transparently when Gemini cannot be reached', async () => {

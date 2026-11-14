@@ -5,6 +5,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { validateIntentSemantics } from '../../../shared/validation/transaction-intent.js';
+import { summarizeTransactionRisk } from '../security/transaction-risk.js';
 import { SOLANA_COMMITMENT, SOLANA_NETWORK } from '../config/network.js';
 import { getDevnetConnection } from '../rpc/devnet-connection.js';
 
@@ -58,6 +59,26 @@ function makeAuditMemo(risk) {
     );
   }
   return `SOLGUARD_V1 | OBSERVED_RISK: ${risk.category.toUpperCase()} ${risk.score}/100 | HEURISTIC`;
+}
+
+function validateRecipientReports(reports, recipients) {
+  if (!Array.isArray(reports) || reports.length !== recipients.length) {
+    throw new TransactionPreparationError(
+      'RISK_UNAVAILABLE',
+      'Every recipient must have a completed security inspection before a transfer can be prepared.',
+    );
+  }
+
+  for (const [index, report] of reports.entries()) {
+    if (!report || typeof report !== 'object' || report.address !== recipients[index].address) {
+      throw new TransactionPreparationError(
+        'RISK_UNAVAILABLE',
+        'Recipient inspection results do not match the transfer recipients.',
+      );
+    }
+  }
+
+  return reports;
 }
 
 function validateTransferIntent(intent) {
@@ -119,7 +140,7 @@ function simulationMessage(error, logs = []) {
 export async function prepareSolTransferTransaction({
   intent,
   payerAddress,
-  riskSummary,
+  recipientReports,
   connection = getDevnetConnection(),
   now = () => new Date(),
 }) {
@@ -140,7 +161,21 @@ export async function prepareSolTransferTransaction({
   if (new Set(recipients.map(({ address }) => address)).size !== recipients.length) {
     throw new TransactionPreparationError('INVALID_INTENT', 'Duplicate recipient addresses are not supported.');
   }
-  if (riskSummary?.status !== 'assessed') {
+
+  let riskSummary;
+  try {
+    riskSummary = summarizeTransactionRisk(
+      validateRecipientReports(recipientReports, recipients),
+    );
+  } catch (error) {
+    if (error instanceof TransactionPreparationError) throw error;
+    throw new TransactionPreparationError(
+      'RISK_UNAVAILABLE',
+      'Recipient security inspection is incomplete. Do not sign this transfer.',
+      error,
+    );
+  }
+  if (riskSummary.status !== 'assessed') {
     throw new TransactionPreparationError('RISK_UNAVAILABLE', 'Recipient security inspection is incomplete. Do not sign this transfer.');
   }
 
@@ -237,6 +272,7 @@ export async function prepareSolTransferTransaction({
 
   return {
     transaction,
+    riskSummary,
     blockhash: latestBlockhash.blockhash,
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     preview: {

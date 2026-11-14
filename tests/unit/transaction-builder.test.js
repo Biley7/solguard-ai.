@@ -14,7 +14,13 @@ import {
 const payer = '11111111111111111111111111111111';
 const recipientOne = 'Stake11111111111111111111111111111111111111';
 const recipientTwo = 'Vote111111111111111111111111111111111111111';
-const riskSummary = { status: 'assessed', score: 0, category: 'low' };
+function recipientReport(address, { category = 'low', score = 0, status = 'assessed' } = {}) {
+  return { address, riskAssessment: { status, category, score } };
+}
+
+function reportsFor(recipients) {
+  return recipients.map(({ address }) => recipientReport(address));
+}
 
 function fakeConnection({
   balance = 1_000_000_000,
@@ -69,7 +75,10 @@ test('builds one unsigned atomic transaction containing all transfers and the co
       { address: recipientTwo, amountLamports: '200000002' },
     ]),
     payerAddress: payer,
-    riskSummary,
+    recipientReports: reportsFor(transferIntent([
+      { address: recipientOne, amountLamports: '100000001' },
+      { address: recipientTwo, amountLamports: '200000002' },
+    ]).recipients),
     connection,
     now: () => new Date('2026-11-10T00:00:00.000Z'),
   });
@@ -91,11 +100,58 @@ test('builds one unsigned atomic transaction containing all transfers and the co
   assert.ok(connection.calls.some(([name]) => name === 'simulate'));
 });
 
+test('derives the memo risk from the actual recipient reports rather than a caller-supplied summary', async () => {
+  const intent = transferIntent([
+    { address: recipientOne, amountLamports: '100000001' },
+    { address: recipientTwo, amountLamports: '200000002' },
+  ]);
+  const prepared = await prepareSolTransferTransaction({
+    intent,
+    payerAddress: payer,
+    recipientReports: [
+      recipientReport(recipientOne, { category: 'high', score: 72 }),
+      recipientReport(recipientTwo, { category: 'low', score: 0 }),
+    ],
+    connection: fakeConnection(),
+  });
+
+  assert.equal(prepared.riskSummary.category, 'high');
+  assert.equal(prepared.riskSummary.score, 72);
+  assert.match(prepared.preview.memoText, /OBSERVED_RISK: HIGH 72\/100/);
+});
+
+test('rejects missing, mismatched, or unassessed recipient reports before building a transaction', async () => {
+  const intent = transferIntent([
+    { address: recipientOne, amountLamports: '1' },
+    { address: recipientTwo, amountLamports: '2' },
+  ]);
+
+  for (const recipientReports of [
+    undefined,
+    [recipientReport(recipientOne)],
+    [recipientReport(recipientTwo), recipientReport(recipientOne)],
+    [
+      recipientReport(recipientOne, { status: 'unavailable', category: 'unavailable', score: null }),
+      recipientReport(recipientTwo),
+    ],
+  ]) {
+    await assert.rejects(
+      prepareSolTransferTransaction({
+        intent,
+        payerAddress: payer,
+        recipientReports,
+        connection: fakeConnection(),
+      }),
+      (error) => error.code === 'RISK_UNAVAILABLE',
+    );
+  }
+});
+
 test('supports a one-recipient transfer and rejects malformed network, quantities, recipients, and self-transfer', async () => {
   const prepared = await prepareSolTransferTransaction({
     intent: transferIntent(),
     payerAddress: payer,
-    riskSummary,
+    recipientReports: reportsFor(transferIntent().recipients),
     connection: fakeConnection(),
   });
   assert.equal(prepared.transaction.instructions.length, 2);
@@ -115,7 +171,7 @@ test('supports a one-recipient transfer and rejects malformed network, quantitie
       prepareSolTransferTransaction({
         intent,
         payerAddress: payer,
-        riskSummary,
+        recipientReports: reportsFor(intent.recipients),
         connection: fakeConnection(),
       }),
       TransactionPreparationError,
@@ -129,7 +185,7 @@ test('checks sender funds including the estimated fee before simulation', async 
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary,
+      recipientReports: reportsFor(transferIntent().recipients),
       connection,
     }),
     (error) => error.code === 'INSUFFICIENT_FUNDS',
@@ -148,7 +204,7 @@ test('rejects program-owned destination accounts', async () => {
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary,
+      recipientReports: reportsFor(transferIntent().recipients),
       connection,
     }),
     (error) => error.code === 'UNSUPPORTED_DESTINATION',
@@ -160,7 +216,7 @@ test('refuses unavailable risk or a failed simulation before a signing request c
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary: { status: 'unavailable' },
+      recipientReports: [recipientReport(recipientOne, { status: 'unavailable', category: 'unavailable', score: null })],
       connection: fakeConnection(),
     }),
     (error) => error.code === 'RISK_UNAVAILABLE',
@@ -170,7 +226,7 @@ test('refuses unavailable risk or a failed simulation before a signing request c
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary,
+      recipientReports: reportsFor(transferIntent().recipients),
       connection: fakeConnection({ simulationError: { InstructionError: [0, 'Custom'] } }),
     }),
     (error) => error.code === 'SIMULATION_FAILED',
@@ -182,7 +238,7 @@ test('requires a current fee estimate and successful RPC simulation', async () =
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary,
+      recipientReports: reportsFor(transferIntent().recipients),
       connection: fakeConnection({ fee: null }),
     }),
     (error) => error.code === 'FEE_UNAVAILABLE',
@@ -191,7 +247,7 @@ test('requires a current fee estimate and successful RPC simulation', async () =
     prepareSolTransferTransaction({
       intent: transferIntent(),
       payerAddress: payer,
-      riskSummary,
+      recipientReports: reportsFor(transferIntent().recipients),
       connection: fakeConnection({ simulationReject: new Error('RPC offline') }),
     }),
     (error) => error.code === 'SIMULATION_UNAVAILABLE',

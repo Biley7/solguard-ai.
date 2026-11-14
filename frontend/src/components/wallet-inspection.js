@@ -92,13 +92,20 @@ function riskMeta(report) {
     };
   }
 
+  const noAdverseSignals = assessment.score === 0;
   return {
     assessed: true,
     tone: RISK_LABELS[assessment.category] ? assessment.category : 'unknown',
-    label: `${RISK_LABELS[assessment.category] ?? 'Unknown'} observed risk`,
-    shortLabel: `${RISK_LABELS[assessment.category] ?? 'Unverified'} risk`,
+    label: noAdverseSignals
+      ? 'No adverse signals observed'
+      : `${RISK_LABELS[assessment.category] ?? 'Unknown'} observed risk`,
+    shortLabel: noAdverseSignals
+      ? 'No adverse signals'
+      : `${RISK_LABELS[assessment.category] ?? 'Unverified'} risk`,
     score: assessment.score,
-    reason: 'Observed heuristic from limited account metadata. This is not a probability of fraud or a guarantee of safety.',
+    reason: noAdverseSignals
+      ? 'Limited metadata only; no adverse signals were observed. This is not a safety score or a guarantee.'
+      : 'Observed heuristic from limited account metadata. This is not a probability of fraud or a guarantee of safety.',
   };
 }
 
@@ -135,19 +142,19 @@ function riskHero(meta, report) {
   const score = meta.score;
   return `<section class="inspection-risk" data-risk-tone="${meta.tone}" aria-label="${escapeHtml(meta.label)}">
     <div class="risk-score-block">
-      <span class="eyebrow">RISK SCORE</span>
+      <span class="eyebrow">HEURISTIC OBSERVATION</span>
       <div class="risk-score-value">${score === null ? '<span class="score-unknown">—</span>' : escapeHtml(score)}<small>/100</small></div>
       ${riskBadge(meta)}
     </div>
     <div class="risk-hero-copy">
       <div class="risk-hero-title">
         <h3>${escapeHtml(meta.label)}</h3>
-        <span class="risk-tone-label">${meta.assessed ? 'HEURISTIC OBSERVATION' : 'NOT ASSESSED'}</span>
+        <span class="risk-tone-label">${meta.assessed ? 'HEURISTIC OBSERVATION · NOT A SAFETY SCORE' : 'NOT ASSESSED'}</span>
       </div>
       <p>${escapeHtml(meta.reason)}</p>
       ${score === null
         ? `<div class="risk-unknown-note">${icon('triangle-alert')}<span>Unknown means the evidence is incomplete. It must not be treated as safe or low risk.</span></div>`
-        : `<div class="risk-meter" role="img" aria-label="Observed heuristic score ${score} out of 100"><span style="width: ${Math.max(0, Math.min(100, score))}%"></span></div>`}
+        : `<div class="risk-meter" role="img" aria-label="Observed heuristic score ${score} out of 100. Not a safety score."><span style="width: ${Math.max(0, Math.min(100, score))}%"></span></div>`}
       <div class="risk-meta-row">
         <span>${escapeHtml(assessment.indicators.length)} observed factor${assessment.indicators.length === 1 ? '' : 's'}</span>
         <span>${escapeHtml(dataAvailability(report).label)}</span>

@@ -42,6 +42,7 @@ async function createPreparedTransaction({ recipientCount = 1 } = {}) {
       blockhash: transaction.recentBlockhash,
       lastValidBlockHeight: 123,
       preview: {
+        network: 'devnet',
         payerAddress: payer.publicKey.toBase58(),
         recipients: recipients.map(({ publicKey }) => ({
           address: publicKey.toBase58(),
@@ -170,6 +171,41 @@ test('does not submit when Phantom signing is rejected', async () => {
     (error) => error instanceof TransactionExecutionError && error.code === 'USER_REJECTED',
   );
   assert.equal(connection.calls.some(([name]) => name === 'send'), false);
+});
+
+test('rejects a prepared transaction mutated after the preview was reviewed', async () => {
+  const { payer, prepared } = await createPreparedTransaction();
+  const extraRecipient = await Keypair.generate();
+  let signCalls = 0;
+  prepared.transaction.add(SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: extraRecipient.publicKey,
+    lamports: 1n,
+  }));
+
+  await assert.rejects(
+    executePreparedTransfer(prepared, {
+      signTransaction: async () => { signCalls += 1; },
+      connection: fakeConnection(),
+    }),
+    (error) => error.code === 'TRANSACTION_PREVIEW_MISMATCH',
+  );
+  assert.equal(signCalls, 0);
+});
+
+test('rejects a preview whose total no longer matches its recipients before signing', async () => {
+  const { prepared } = await createPreparedTransaction();
+  let signCalls = 0;
+  prepared.preview.totalLamports = '2';
+
+  await assert.rejects(
+    executePreparedTransfer(prepared, {
+      signTransaction: async () => { signCalls += 1; },
+      connection: fakeConnection(),
+    }),
+    (error) => error.code === 'INVALID_EXECUTION_REQUEST',
+  );
+  assert.equal(signCalls, 0);
 });
 
 test('does not submit if the wallet modifies the reviewed message', async () => {

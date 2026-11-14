@@ -30,7 +30,7 @@ function riskTone(riskSummary) {
 function riskLabel(riskSummary) {
   if (riskSummary.score === null || !riskSummary.category) return 'Unverified';
   const category = riskSummary.category[0].toUpperCase() + riskSummary.category.slice(1);
-  return `${category} · ${riskSummary.score}/100`;
+  return `${category} observed · ${riskSummary.score}/100`;
 }
 
 export function transactionConfirmationView(prepared, riskSummary) {
@@ -101,8 +101,8 @@ export function transactionConfirmationView(prepared, riskSummary) {
           <small>Phantom account requesting authorization</small>
         </section>
         <section class="review-detail-block">
-          <span class="field-label">Audit memo</span>
-          <span class="address-inline review-memo"><code>${escapeHtml(preview.memoText)}</code>${copyButton(preview.memoText, 'Audit memo')}</span>
+          <span class="field-label">Provenance memo</span>
+          <span class="address-inline review-memo"><code>${escapeHtml(preview.memoText)}</code>${copyButton(preview.memoText, 'Provenance memo')}</span>
           <small>SolGuard-generated heuristic record. Not an independently verified security certification.</small>
         </section>
       </div>
@@ -320,7 +320,7 @@ export function transactionExecutionView(result, preview) {
     <dl class="execution-facts">
       <div><dt>Result</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Total</dt><dd>${escapeHtml(formatLamports(preview.totalLamports))} SOL to ${preview.recipients.length} recipient${preview.recipients.length === 1 ? '' : 's'}</dd></div>
-      <div><dt>Audit memo</dt><dd><code>${escapeHtml(preview.memoText)}</code></dd></div>
+      <div><dt>Provenance memo</dt><dd><code>${escapeHtml(preview.memoText)}</code></dd></div>
       <div><dt>On-chain memo check</dt><dd>${escapeHtml(memoCheck)}</dd></div>
       ${signature}
     </dl>

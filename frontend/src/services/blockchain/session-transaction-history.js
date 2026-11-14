@@ -56,3 +56,7 @@ export function getSessionTransactions() {
     recipients: entry.recipients.map((recipient) => ({ ...recipient })),
   }));
 }
+
+export function hasUnresolvedSessionTransaction() {
+  return transactions.some((entry) => entry.status === 'pending' || entry.status === 'submitted');
+}

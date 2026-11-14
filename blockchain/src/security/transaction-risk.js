@@ -4,6 +4,24 @@ const RISK_RANK = {
   high: 2,
   critical: 3,
 };
+const RISK_BOUNDS = {
+  low: [0, 29],
+  moderate: [30, 59],
+  high: [60, 79],
+  critical: [80, 100],
+};
+
+function assessmentIsConsistent(assessment) {
+  if (
+    assessment?.status !== 'assessed'
+    || !Number.isInteger(assessment.score)
+    || !(assessment.category in RISK_BOUNDS)
+  ) {
+    return false;
+  }
+  const [minimum, maximum] = RISK_BOUNDS[assessment.category];
+  return assessment.score >= minimum && assessment.score <= maximum;
+}
 
 export class TransactionRiskError extends Error {
   constructor(code, message) {
@@ -19,9 +37,7 @@ export function summarizeTransactionRisk(reports) {
   }
 
   const unavailable = reports.filter((report) => (
-    report?.riskAssessment?.status !== 'assessed'
-    || !Number.isInteger(report.riskAssessment.score)
-    || !(report.riskAssessment.category in RISK_RANK)
+    !assessmentIsConsistent(report?.riskAssessment)
   ));
   if (unavailable.length > 0) {
     return {
