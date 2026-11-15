@@ -10,6 +10,11 @@ node_modules/
 dist/
 coverage/
 
+# Playwright output
+playwright-report/
+test-results/
+blob-report/
+
 # Logs
 *.log
 npm-debug.log*

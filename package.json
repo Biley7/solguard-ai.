@@ -14,7 +14,13 @@
     "build": "vite build",
     "start": "node --env-file-if-exists=.env backend/src/server.js",
     "test": "node --test",
-    "validate": "node --check backend/src/app.js && node --check backend/src/server.js && node --check backend/src/routes/ai.js && node --check backend/src/services/gemini/intent-interpreter.js && node --check backend/src/middleware/ai-rate-limit.js && node --check backend/src/validators/intent.js && node --check backend/src/validators/schema-validator.js && node --check frontend/src/main.js && node --check frontend/src/app.js && node --check frontend/src/components/intent-result.js && node --check frontend/src/components/transaction-confirmation.js && node --check frontend/src/components/activity-table.js && node --check frontend/src/services/wallet/phantom-wallet.js && node --check frontend/src/services/blockchain/wallet-balance.js && node --check frontend/src/services/blockchain/session-transaction-history.js && node --check frontend/src/services/theme/theme.js && node --check frontend/src/services/security/scan-history.js && node --check blockchain/src/config/network.js && node --check blockchain/src/rpc/devnet-connection.js && node --check blockchain/src/inspection/wallet-security.js && node --check blockchain/src/security/risk-assessment.js && node --check blockchain/src/security/transaction-risk.js && node --check blockchain/src/transactions/transaction-builder.js && node --check blockchain/src/transactions/transaction-executor.js && node --check vite.config.js && npm test"
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:integration": "node --test \"tests/integration/*.test.js\"",
+    "test:e2e": "playwright test",
+    "test:devnet": "RUN_DEVNET_TESTS=1 node --test \"tests/integration/devnet-readonly.test.js\"",
+    "coverage": "node --experimental-test-coverage --test-coverage-include=\"backend/**/*.js\" --test-coverage-include=\"blockchain/**/*.js\" --test-coverage-include=\"shared/**/*.js\" --test",
+    "lint": "node scripts/lint.mjs",
+    "validate": "npm run lint && npm test"
   },
   "dependencies": {
     "@solana/web3.js": "^3.2.0",
@@ -24,6 +30,7 @@
     "express-rate-limit": "^8.7.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
     "concurrently": "^10.0.7",
     "tailwindcss": "^4.3.5",

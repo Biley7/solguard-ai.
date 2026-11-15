@@ -28,9 +28,17 @@ npm run dev:frontend   # Start only the frontend
 npm run dev:backend    # Start only the API with automatic reload
 npm run build          # Build the frontend with Vite
 npm start              # Start the Express API
-npm test               # Run unit, validation, and API tests
-npm run validate       # Run JavaScript syntax checks and all tests
+npm test               # Run unit, API, and integration tests
+npm run test:unit      # Run unit tests only
+npm run test:integration # Run integration tests only
+npm run test:e2e       # Run Playwright browser journeys with wallet/RPC doubles
+npm run test:devnet    # Opt-in read-only live Devnet RPC check
+npm run coverage       # Report Node coverage for backend and domain code
+npm run lint           # Syntax, secret, and unsafe-endpoint checks
+npm run validate       # Run lint and all node:test tests
 ```
+
+Browser E2E requires Chromium once per machine: `npx playwright install chromium`. E2E never uses a real wallet or real funds; it starts its own loopback frontend/backend and replaces Phantom and the Devnet RPC with deterministic doubles. The live Devnet command is read-only and skipped by the normal test run unless `RUN_DEVNET_TESTS=1` is set.
 
 The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; a server-host deployment must set `HOST=0.0.0.0` (serverless deployments require a platform-specific adapter instead). Set `TRUST_PROXY_HOPS` to the exact trusted reverse-proxy hop count for deployment; do not enable blanket proxy trust.
 
@@ -40,8 +48,9 @@ The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint i
 - `backend/src/` — Express API, server-side Gemini transport, intent interpretation/validation, and rate-limited `/api/ai/interpret` route.
 - `blockchain/src/` — Fixed Devnet configuration, RPC connection, wallet inspection, deterministic risk summary, transaction builder, simulation, and signed-transaction submission/confirmation.
 - `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
-- `tests/` — Unit, validation, backend, blockchain, and fixture areas.
-- `docs/` — Architecture, API, data model, and security design.
+- `tests/` — Unit, backend API, integration, and Playwright browser E2E suites, plus deterministic wallet/RPC fixtures.
+- `scripts/lint.mjs` — Syntax and static secret/unsafe-endpoint checks.
+- `docs/` — Architecture, API, data model, security design, and testing evidence.
 
 Wallet X-Ray is a read-only investigation of the entered public address: balance, account owner/executable metadata, and up to 20 recent Devnet signatures. It cannot establish complete history, account age, beneficial ownership, or whether the wallet is malicious. Risk is heuristic, not a probability or safety guarantee.
 
@@ -79,4 +88,6 @@ Deploy the Vite frontend as a static site and the Express backend as a Node.js s
 - [Data models](docs/DATA_MODELS.md)
 - [Security design](docs/SECURITY_DESIGN.md)
 - [Phase 8 security audit and threat model](docs/SECURITY_AUDIT_FINAL.md)
+- [Phase 9 testing strategy](docs/TESTING_STRATEGY.md)
+- [Phase 9 test results](docs/TEST_RESULTS.md)
 - [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

@@ -97,7 +97,9 @@ test('builds one unsigned atomic transaction containing all transfers and the co
   assert.equal(prepared.preview.simulationStatus, 'passed');
   assert.equal(prepared.preview.network, 'devnet');
   assert.equal(prepared.transaction.signature, null);
-  assert.ok(connection.calls.some(([name]) => name === 'simulate'));
+  const simulationCall = connection.calls.find(([name]) => name === 'simulate');
+  assert.ok(simulationCall);
+  assert.ok(simulationCall[1] instanceof Transaction);
 });
 
 test('derives the memo risk from the actual recipient reports rather than a caller-supplied summary', async () => {
@@ -145,6 +147,23 @@ test('rejects missing, mismatched, or unassessed recipient reports before buildi
       (error) => error.code === 'RISK_UNAVAILABLE',
     );
   }
+});
+
+test('normalizes bigint blockhash expiry returned by web3.js v3', async () => {
+  const connection = fakeConnection();
+  connection.getLatestBlockhash = async () => ({
+    blockhash: '11111111111111111111111111111111',
+    lastValidBlockHeight: 123n,
+  });
+  const prepared = await prepareSolTransferTransaction({
+    intent: transferIntent(),
+    payerAddress: payer,
+    recipientReports: reportsFor(transferIntent().recipients),
+    connection,
+  });
+
+  assert.equal(prepared.lastValidBlockHeight, 123);
+  assert.equal(prepared.transaction.lastValidBlockHeight, 123);
 });
 
 test('supports a one-recipient transfer and rejects malformed network, quantities, recipients, and self-transfer', async () => {

@@ -129,6 +129,7 @@ test('submits only the exact Phantom-signed transaction to the injected Devnet R
   assert.equal(connection.calls.filter(([name]) => name === 'send').length, 1);
   assert.equal(connection.calls.filter(([name]) => name === 'confirm').length, 1);
   assert.equal(connection.calls.filter(([name]) => name === 'simulate').length, 1);
+  assert.ok(connection.calls.find(([name]) => name === 'simulate')[1] instanceof Transaction);
   assert.equal(connection.calls.filter(([name]) => name === 'getParsedTransaction').length, 1);
 });
 

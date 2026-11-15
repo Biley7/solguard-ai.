@@ -302,10 +302,9 @@ export async function executePreparedTransfer(prepared, {
   }
 
   try {
-    const simulation = await connection.simulateTransaction(reviewedTransaction.compileMessage(), {
-      commitment: SOLANA_COMMITMENT,
-      replaceRecentBlockhash: true,
-    });
+    // Keep the legacy web3.js v3 overload: a Transaction or Message, with no
+    // config object. The connection carries the confirmed commitment.
+    const simulation = await connection.simulateTransaction(reviewedTransaction);
     if (simulation?.value?.err) {
       throw new TransactionExecutionError(
         'SIMULATION_FAILED',

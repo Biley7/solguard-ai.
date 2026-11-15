@@ -34,6 +34,17 @@ function canonicalPublicKey(address, field) {
   }
 }
 
+function safeBlockHeight(value) {
+  if (Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === 'bigint' && value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return Number(value);
+  }
+  throw new TransactionPreparationError(
+    'INVALID_RPC_RESPONSE',
+    'Devnet RPC returned an invalid blockhash expiry.',
+  );
+}
+
 function unsignedInteger(value, field) {
   try {
     if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('Unsafe number.');
@@ -204,10 +215,11 @@ export async function prepareSolTransferTransaction({
     (total, recipient) => total + BigInt(recipient.amountLamports),
     0n,
   );
+  const lastValidBlockHeight = safeBlockHeight(latestBlockhash.lastValidBlockHeight);
   const transaction = new Transaction({
     feePayer: payer,
     blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    lastValidBlockHeight,
   });
 
   for (const recipient of recipients) {
@@ -252,10 +264,11 @@ export async function prepareSolTransferTransaction({
 
   let simulation;
   try {
-    simulation = await connection.simulateTransaction(message, {
-      commitment: SOLANA_COMMITMENT,
-      replaceRecentBlockhash: true,
-    });
+    // web3.js v3 accepts a Transaction or Message here; it does not accept a
+    // simulation config object on the legacy overload. The connection already
+    // carries the confirmed commitment, and the transaction carries a fresh
+    // Devnet blockhash.
+    simulation = await connection.simulateTransaction(transaction);
   } catch (error) {
     throw new TransactionPreparationError(
       'SIMULATION_UNAVAILABLE',
@@ -274,7 +287,7 @@ export async function prepareSolTransferTransaction({
     transaction,
     riskSummary,
     blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    lastValidBlockHeight,
     preview: {
       previewId,
       network: SOLANA_NETWORK,
