@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { isCanonicalSolanaAddress } from '../../utils/solana-address.js';
 
 const REJECTED_CODES = new Set([4001, 4100]);
 
@@ -19,8 +19,7 @@ export function getPhantomProvider(windowRef = globalThis.window) {
 function normalizePublicKey(value) {
   try {
     const address = typeof value?.toBase58 === 'function' ? value.toBase58() : String(value);
-    const publicKey = new PublicKey(address);
-    if (publicKey.toBase58() !== address) throw new Error('Non-canonical public key.');
+    if (!isCanonicalSolanaAddress(address)) throw new Error('Non-canonical public key.');
     return address;
   } catch (error) {
     throw new PhantomWalletError(

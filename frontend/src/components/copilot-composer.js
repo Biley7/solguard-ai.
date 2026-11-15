@@ -21,6 +21,7 @@ export function copilotComposer() {
           maxlength="1800"
           autocomplete="off"
           aria-describedby="copilot-prompt-help"
+          aria-errormessage="copilot-form-feedback"
           placeholder="Send 0.25 SOL to a contractor for design work."
           required
         ></textarea>

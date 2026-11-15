@@ -18,11 +18,11 @@ export function xrayPage() {
       <form class="address-form xray-form" data-form="xray" novalidate>
         <label class="field-label" for="xray-address">Solana public address</label>
         <div class="address-input-row">
-          <div class="input-with-icon">${icon('search')}<input id="xray-address" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a public wallet address" aria-describedby="xray-address-help" required /></div>
+          <div class="input-with-icon">${icon('search')}<input id="xray-address" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a public wallet address" aria-describedby="xray-address-help" aria-errormessage="xray-feedback" required /></div>
           <button class="button button--primary" type="submit">${icon('scan')}<span>Analyse address</span></button>
         </div>
         <p class="field-help" id="xray-address-help">Address data is public. Never enter a seed phrase, private key, or recovery information.</p>
-        <div class="form-feedback" data-feedback="xray" role="status" aria-live="polite"></div>
+        <div class="form-feedback" id="xray-feedback" data-feedback="xray" role="status" aria-live="polite"></div>
       </form>
     </section>
 

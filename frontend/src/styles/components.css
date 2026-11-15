@@ -2089,7 +2089,7 @@
    9. Responsive component adjustments
    ========================================================================== */
 
-@media (max-width: 760px) {
+@media (max-width: 860px) {
   .theme-switch {
     height: 32px;
   }

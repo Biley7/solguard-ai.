@@ -1,5 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { getDevnetConnection } from '../../../../blockchain/src/rpc/devnet-connection.js';
+import { retryRead } from '../../../../blockchain/src/rpc/read-retry.js';
 import {
   LAMPORTS_PER_SOL,
   SOLANA_COMMITMENT,
@@ -37,7 +38,7 @@ export async function fetchDevnetBalance(address, connection = getDevnetConnecti
       throw new Error('Wallet address is not canonical.');
     }
 
-    const lamports = await connection.getBalance(publicKey, SOLANA_COMMITMENT);
+    const lamports = await retryRead(() => connection.getBalance(publicKey, SOLANA_COMMITMENT));
     const balanceLamports = BigInt(lamports);
     return {
       lamports: balanceLamports,

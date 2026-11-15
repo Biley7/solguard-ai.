@@ -142,15 +142,15 @@ export function transactionConfirmationView(prepared, riskSummary) {
 
       <div id="transaction-execution-result" aria-live="polite"></div>
 
-      <dialog class="confirmation-dialog" data-cancel-dialog aria-labelledby="cancel-transfer-title">
+      <dialog class="confirmation-dialog" data-cancel-dialog aria-labelledby="cancel-transfer-title" aria-describedby="cancel-transfer-description">
         <div class="dialog-icon">${icon('triangle-alert')}</div>
         <div class="dialog-copy">
           <span class="eyebrow">DISCARD REVIEW</span>
           <h4 id="cancel-transfer-title">Discard this prepared transaction?</h4>
-          <p>The simulation and recipient evidence will be cleared from this review. No wallet signing request has been made and no funds have moved.</p>
+          <p id="cancel-transfer-description">The simulation and recipient evidence will be cleared from this review. No wallet signing request has been made and no funds have moved.</p>
         </div>
         <div class="dialog-actions">
-          <button class="button button--secondary" type="button" data-action="dismiss-cancel-transfer">Keep review</button>
+          <button class="button button--secondary" type="button" data-action="dismiss-cancel-transfer" autofocus>Keep review</button>
           <button class="button button--primary" type="button" data-action="confirm-cancel-transfer">Discard transaction</button>
         </div>
       </dialog>

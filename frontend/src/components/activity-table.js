@@ -152,7 +152,7 @@ export function activityTable({ compact = false, variant = 'history' } = {}) {
     : ['Signature', 'Date', 'Recipient', 'Amount', 'Status', 'Risk at preparation', 'Explorer'];
   const variantClass = variant === 'overview' ? 'activity-table--overview' : 'activity-table--history';
   return `
-    <div class="table-wrap ${compact ? 'table-wrap--compact' : ''} ${variant === 'overview' ? 'table-wrap--overview' : 'table-wrap--history'}" data-activity-variant="${variant}">
+    <div class="table-wrap ${compact ? 'table-wrap--compact' : ''} ${variant === 'overview' ? 'table-wrap--overview' : 'table-wrap--history'}" data-activity-variant="${variant}" tabindex="0" role="group" aria-label="Scrollable session transaction table">
       <table class="activity-table ${variantClass}">
         <thead>
           <tr>${headers.map((header) => `<th scope="col">${header}</th>`).join('')}</tr>

@@ -565,7 +565,7 @@ html[data-sidebar="collapsed"] .app-shell {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 860px) {
   :root {
     --gutter: 1rem;
     --topbar-height: 3.75rem;
@@ -698,7 +698,7 @@ html[data-sidebar="collapsed"] .app-shell {
 
 /* Compact navigation rail ------------------------------------------------ */
 
-@media (min-width: 761px) {
+@media (min-width: 861px) {
   html[data-sidebar="collapsed"] .sidebar {
     padding-right: 10px;
     padding-left: 10px;

@@ -806,7 +806,7 @@
 
 /* Responsive overview ------------------------------------------------------ */
 
-@media (max-width: 760px) {
+@media (max-width: 860px) {
   .topbar .mobile-menu {
     display: grid;
   }

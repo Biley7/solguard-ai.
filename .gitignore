@@ -10,10 +10,11 @@ node_modules/
 dist/
 coverage/
 
-# Playwright output
+# Playwright and performance output
 playwright-report/
 test-results/
 blob-report/
+perf-artifacts/
 
 # Logs
 *.log

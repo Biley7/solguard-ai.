@@ -1,4 +1,3 @@
-import { PublicKey } from '@solana/web3.js';
 import { dashboardPage } from './pages/dashboard.js';
 import { copilotPage } from './pages/copilot.js';
 import { scannerPage } from './pages/scanner.js';
@@ -8,14 +7,14 @@ import { settingsPage } from './pages/settings.js';
 import { icon } from './components/icons.js';
 import { activityRows } from './components/activity-table.js';
 import { createPhantomWallet, PhantomWalletError } from './services/wallet/phantom-wallet.js';
-import { fetchDevnetBalance } from './services/blockchain/wallet-balance.js';
+import { loadBlockchainModules } from './services/blockchain/lazy-blockchain.js';
+import { isCanonicalSolanaAddress } from './utils/solana-address.js';
 import {
   getSessionTransactions,
   hasUnresolvedSessionTransaction,
   recordSessionTransaction,
   updateSessionTransaction,
 } from './services/blockchain/session-transaction-history.js';
-import { inspectWalletSecurity, WalletInspectionError } from '../../blockchain/src/inspection/wallet-security.js';
 import {
   walletInspectionError,
   walletInspectionLoading,
@@ -32,16 +31,6 @@ import {
   transactionExecutionView,
   transactionPreparationErrorView,
 } from './components/transaction-confirmation.js';
-import { summarizeTransactionRisk } from '../../blockchain/src/security/transaction-risk.js';
-import {
-  prepareSolTransferTransaction,
-  TransactionPreparationError,
-} from '../../blockchain/src/transactions/transaction-builder.js';
-import {
-  executePreparedTransfer,
-  TransactionExecutionError,
-} from '../../blockchain/src/transactions/transaction-executor.js';
-import { getDevnetConnection } from '../../blockchain/src/rpc/devnet-connection.js';
 import { initTheme, setThemePreference, THEME_LABELS } from './services/theme/theme.js';
 import { recordWalletScan } from './services/security/scan-history.js';
 
@@ -60,8 +49,12 @@ let balanceState = { status: 'idle', sol: null, observedAt: null };
 let currentIntentResponse = null;
 let pendingTransfer = null;
 let toastTimer;
+let activeInterpretationController;
+let lastBalanceRequestAt = 0;
+const BALANCE_REFRESH_THROTTLE_MS = 15_000;
+const INTERPRETATION_TIMEOUT_MS = 20_000;
 const SIDEBAR_STORAGE_KEY = 'solguard-sidebar-collapsed';
-const mobileSidebarQuery = window.matchMedia('(max-width: 760px)');
+const mobileSidebarQuery = window.matchMedia('(max-width: 860px)');
 
 function shortenAddress(address) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -259,12 +252,26 @@ function renderWalletStatus() {
   }
 }
 
-async function refreshBalance({ notifyError = false } = {}) {
+async function refreshBalance({ notifyError = false, force = false } = {}) {
   if (walletState.status !== 'connected' || !walletState.address) return;
+  if (
+    !force
+    && balanceState.status === 'loaded'
+    && Date.now() - lastBalanceRequestAt < BALANCE_REFRESH_THROTTLE_MS
+  ) return;
+  if (navigator.onLine === false) {
+    balanceState = { status: 'error', sol: null, observedAt: null };
+    renderWalletStatus();
+    if (notifyError) showToast('You are offline. Reconnect before refreshing the Devnet balance.', 'warning');
+    return;
+  }
+
   const address = walletState.address;
+  lastBalanceRequestAt = Date.now();
   balanceState = { status: 'loading', sol: null, observedAt: null };
   renderWalletStatus();
   try {
+    const { fetchDevnetBalance } = await loadBlockchainModules();
     const balance = await fetchDevnetBalance(address);
     if (walletState.address !== address) return;
     balanceState = { status: 'loaded', sol: balance.sol, observedAt: balance.observedAt };
@@ -367,13 +374,14 @@ function trapSidebarFocus(event) {
 
 function renderView(viewName, { updateHistory = true, focus = false } = {}) {
   const view = views[viewName] ? viewName : 'dashboard';
+  activeInterpretationController?.abort('superseded');
+  activeInterpretationController = null;
   currentIntentResponse = null;
   pendingTransfer = null;
   const content = document.querySelector('#app-content');
   content.innerHTML = views[view].render();
   content.classList.remove('view-enter');
-  void content.offsetWidth;
-  content.classList.add('view-enter');
+  requestAnimationFrame(() => content.classList.add('view-enter'));
   document.querySelector('#current-page-label').textContent = views[view].label;
   document.title = `${views[view].label} | SolGuard AI`;
   renderWalletStatus();
@@ -441,11 +449,25 @@ function renderCopilotProcessing() {
 }
 
 async function handleCopilotSubmit(form) {
-  const prompt = form.elements.prompt.value.trim();
+  const promptField = form.elements.prompt;
+  const prompt = promptField.value.trim();
   if (!prompt) {
+    promptField.setAttribute('aria-invalid', 'true');
     setFeedback(form, 'Enter a request before continuing.');
+    promptField.focus();
     return;
   }
+  promptField.removeAttribute('aria-invalid');
+
+  if (navigator.onLine === false) {
+    setFeedback(form, 'You are offline. Reconnect before requesting an interpretation.', 'warning');
+    return;
+  }
+
+  activeInterpretationController?.abort('superseded');
+  const controller = new AbortController();
+  activeInterpretationController = controller;
+  const timeout = window.setTimeout(() => controller.abort('timeout'), INTERPRETATION_TIMEOUT_MS);
 
   const submitButton = form.querySelector('[type="submit"]');
   const originalButton = submitButton?.innerHTML;
@@ -466,6 +488,7 @@ async function handleCopilotSubmit(form) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt }),
+      signal: controller.signal,
     });
     const payload = await response.json();
     if (!response.ok) {
@@ -483,9 +506,14 @@ async function handleCopilotSubmit(form) {
     if (payload.status !== 'ready') {
       setFeedback(form, payload.clarificationQuestion || payload.explanation, 'info');
     }
-  } catch {
+  } catch (error) {
+    if (controller.signal.reason === 'superseded') return;
     currentIntentResponse = null;
-    const message = 'Could not reach the SolGuard interpretation service. Confirm the backend is running and try again.';
+    const message = controller.signal.reason === 'timeout'
+      ? 'The interpretation request timed out. Check your connection, then try again.'
+      : navigator.onLine === false
+        ? 'You are offline. Reconnect before requesting an interpretation.'
+        : 'Could not reach the SolGuard interpretation service. Confirm the backend is running and try again.';
     const errorView = intentRequestErrorView(message);
     const previewBody = document.querySelector('#intent-preview-body');
     if (previewBody) previewBody.innerHTML = errorView;
@@ -493,10 +521,14 @@ async function handleCopilotSubmit(form) {
     if (state) state.innerHTML = errorView;
     setFeedback(form, message, 'warning');
   } finally {
-    if (submitButton && originalButton !== undefined) {
-      submitButton.disabled = false;
-      submitButton.removeAttribute('aria-busy');
-      submitButton.innerHTML = originalButton;
+    window.clearTimeout(timeout);
+    if (activeInterpretationController === controller) {
+      activeInterpretationController = null;
+      if (submitButton && originalButton !== undefined) {
+        submitButton.disabled = false;
+        submitButton.removeAttribute('aria-busy');
+        submitButton.innerHTML = originalButton;
+      }
     }
   }
 }
@@ -555,6 +587,11 @@ async function scanIntentRecipients(button) {
   focusReviewStage({ focus: false });
 
   try {
+    const {
+      inspectWalletSecurity,
+      prepareSolTransferTransaction,
+      summarizeTransactionRisk,
+    } = await loadBlockchainModules();
     const results = await Promise.all(intent.recipients.map(async (recipient) => {
       try {
         const report = await inspectWalletSecurity(recipient.address);
@@ -564,7 +601,7 @@ async function scanIntentRecipients(button) {
           markup: walletInspectionView(report, { compact: true }),
         };
       } catch (error) {
-        const message = error instanceof WalletInspectionError
+        const message = error?.name === 'WalletInspectionError'
           ? error.message
           : 'Devnet inspection could not be completed.';
         const observedAt = new Date().toISOString();
@@ -650,7 +687,7 @@ async function scanIntentRecipients(button) {
   } catch (error) {
     if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
       || document.getElementById('intent-review-stage') !== stage) return;
-    const message = error instanceof TransactionPreparationError
+    const message = error?.name === 'TransactionPreparationError'
       ? error.message
       : 'The Devnet transaction could not be safely prepared.';
     stage.innerHTML = reviewStageHeader(
@@ -677,6 +714,7 @@ function editPreparedTransfer() {
 function requestCancelTransfer(button) {
   const dialog = button.closest('.transaction-confirmation')?.querySelector('[data-cancel-dialog]');
   if (typeof dialog?.showModal === 'function') {
+    dialog.addEventListener('close', () => button.focus({ preventScroll: true }), { once: true });
     dialog.showModal();
   } else {
     confirmCancelTransfer(button);
@@ -693,6 +731,7 @@ function confirmCancelTransfer(button) {
   const stage = document.getElementById('intent-review-stage');
   if (stage) stage.innerHTML = '';
   showToast('Prepared transaction discarded. No wallet request was made.');
+  focusCopilotPrompt();
 }
 
 async function approvePreparedTransfer(button) {
@@ -734,6 +773,7 @@ async function approvePreparedTransfer(button) {
 
   let sessionTransactionId;
   try {
+    const { executePreparedTransfer, getDevnetConnection } = await loadBlockchainModules();
     sessionTransactionId = recordSessionTransaction(
       pending.prepared.preview,
       pending.riskSummary,
@@ -763,11 +803,11 @@ async function approvePreparedTransfer(button) {
     } else {
       showToast('The transaction was submitted but is not confirmed. Check its Devnet Explorer status before retrying.', 'warning');
     }
-    void refreshBalance({ notifyError: true });
+    void refreshBalance({ notifyError: true, force: true });
   } catch (error) {
-    const rejected = error instanceof TransactionExecutionError && error.code === 'USER_REJECTED'
+    const rejected = error?.name === 'TransactionExecutionError' && error.code === 'USER_REJECTED'
       || error instanceof PhantomWalletError && error.code === 'USER_REJECTED';
-    const code = error instanceof TransactionExecutionError || error instanceof PhantomWalletError
+    const code = error?.name === 'TransactionExecutionError' || error instanceof PhantomWalletError
       ? error.code
       : 'EXECUTION_FAILED';
     const result = {
@@ -806,12 +846,7 @@ async function approvePreparedTransfer(button) {
 }
 
 function isCanonicalAddress(value) {
-  try {
-    const publicKey = new PublicKey(value);
-    return publicKey.toBase58() === value;
-  } catch {
-    return false;
-  }
+  return isCanonicalSolanaAddress(value);
 }
 
 async function handleAddressSubmit(form) {
@@ -835,6 +870,10 @@ async function handleAddressSubmit(form) {
   const target = document.getElementById(targetId);
   const submitButton = form.querySelector('[type="submit"]');
   if (!target || !submitButton) return;
+  if (navigator.onLine === false) {
+    setFeedback(form, 'You are offline. Reconnect before inspecting a Devnet address.', 'warning');
+    return;
+  }
   const inspectionMeta = form.closest('.main-content')?.querySelector('[data-inspection-meta]');
 
   const originalButton = submitButton.innerHTML;
@@ -849,6 +888,7 @@ async function handleAddressSubmit(form) {
   }
 
   try {
+    const { inspectWalletSecurity } = await loadBlockchainModules();
     const report = await inspectWalletSecurity(address);
     recordWalletScan(
       report,
@@ -870,7 +910,7 @@ async function handleAddressSubmit(form) {
       setFeedback(form, 'Some required Devnet reads failed. This result is unverified, not low risk.', 'warning');
     }
   } catch (error) {
-    const message = error instanceof WalletInspectionError
+    const message = error?.name === 'WalletInspectionError'
       ? error.message
       : 'The Devnet wallet inspection could not be completed.';
     const currentTarget = document.getElementById(targetId);
@@ -1029,7 +1069,7 @@ function onClick(event) {
     if (!walletState.address) {
       showToast('Connect Phantom before refreshing your Devnet balance.', 'warning');
     } else {
-      void refreshBalance({ notifyError: true });
+      void refreshBalance({ notifyError: true, force: true });
     }
   } else if (action === 'copy-wallet-address') {
     if (!walletState.address) {
@@ -1109,7 +1149,7 @@ export function mountApp() {
       balanceState = { status: 'idle', sol: null, observedAt: null };
     }
     renderWalletStatus();
-    if (state.status === 'connected') void refreshBalance({ notifyError: true });
+    if (state.status === 'connected') void refreshBalance({ notifyError: true, force: true });
     if (state.status === 'error') {
       showToast('Phantom reported an invalid account state. Reconnect your wallet.', 'warning');
     }
@@ -1118,6 +1158,13 @@ export function mountApp() {
     if (document.visibilityState === 'visible' && walletState.status === 'connected') {
       void refreshBalance();
     }
+  });
+  window.addEventListener('offline', () => {
+    showToast('You are offline. Read-only chain checks and new submissions will fail until the connection returns.', 'warning');
+  });
+  window.addEventListener('online', () => {
+    showToast('Connection restored. SolGuard will refresh read-only wallet data.', 'info');
+    if (walletState.status === 'connected') void refreshBalance({ force: true });
   });
   window.addEventListener('popstate', () => {
     renderView(window.location.hash.slice(1), { updateHistory: false });

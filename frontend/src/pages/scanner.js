@@ -26,11 +26,11 @@ export function scannerPage() {
         <form class="address-form scanner-form" data-form="scanner" novalidate>
           <label class="field-label" for="scanner-address">Recipient public address</label>
           <div class="address-input-row">
-            <div class="input-with-icon">${icon('search')}<input id="scanner-address" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Enter a Solana public address" aria-describedby="scanner-address-help" required /></div>
+            <div class="input-with-icon">${icon('search')}<input id="scanner-address" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Enter a Solana public address" aria-describedby="scanner-address-help" aria-errormessage="scanner-feedback" required /></div>
             <button class="button button--primary" type="submit">${icon('scan')}<span>Scan wallet</span></button>
           </div>
           <p class="field-help" id="scanner-address-help">Public addresses only. Reads up to 20 recent Devnet signatures and never requests a signature.</p>
-          <div class="form-feedback" data-feedback="scanner" role="status" aria-live="polite"></div>
+          <div class="form-feedback" id="scanner-feedback" data-feedback="scanner" role="status" aria-live="polite"></div>
         </form>
       </div>
     </section>

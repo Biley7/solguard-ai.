@@ -36,9 +36,14 @@ npm run test:devnet    # Opt-in read-only live Devnet RPC check
 npm run coverage       # Report Node coverage for backend and domain code
 npm run lint           # Syntax, secret, and unsafe-endpoint checks
 npm run validate       # Run lint and all node:test tests
+npm run measure:performance  # Lighthouse-adjacent runtime, network, and API metrics
+npm run check:accessibility  # axe WCAG scan plus keyboard, labels, and target checks
+npm run check:responsive     # Six widths, both themes, reduced motion, screenshots
 ```
 
 Browser E2E requires Chromium once per machine: `npx playwright install chromium`. E2E never uses a real wallet or real funds; it starts its own loopback frontend/backend and replaces Phantom and the Devnet RPC with deterministic doubles. The live Devnet command is read-only and skipped by the normal test run unless `RUN_DEVNET_TESTS=1` is set.
+
+The performance and accessibility scripts run against a production build, not the Vite dev server. Run `npm run build`, serve it with `npx vite preview --host 127.0.0.1 --port 4173`, and start the API with `npm start` in another terminal before using them. Results and screenshots are written to the gitignored `perf-artifacts/` directory; each script accepts `--url`, `--out`, and (for the performance script) `--api` overrides.
 
 The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; a server-host deployment must set `HOST=0.0.0.0` (serverless deployments require a platform-specific adapter instead). Set `TRUST_PROXY_HOPS` to the exact trusted reverse-proxy hop count for deployment; do not enable blanket proxy trust.
 
@@ -90,4 +95,6 @@ Deploy the Vite frontend as a static site and the Express backend as a Node.js s
 - [Phase 8 security audit and threat model](docs/SECURITY_AUDIT_FINAL.md)
 - [Phase 9 testing strategy](docs/TESTING_STRATEGY.md)
 - [Phase 9 test results](docs/TEST_RESULTS.md)
+- [Phase 10 performance audit](docs/PERFORMANCE_AUDIT.md)
+- [Phase 10 accessibility audit](docs/ACCESSIBILITY_AUDIT.md)
 - [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

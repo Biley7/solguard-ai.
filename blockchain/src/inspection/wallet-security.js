@@ -1,5 +1,6 @@
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { getDevnetConnection } from '../rpc/devnet-connection.js';
+import { retryRead } from '../rpc/read-retry.js';
 import { SOLANA_COMMITMENT, SOLANA_NETWORK } from '../config/network.js';
 import { assessWalletRisk } from '../security/risk-assessment.js';
 
@@ -97,14 +98,16 @@ export async function inspectWalletSecurity(address, connection = getDevnetConne
     throw new WalletInspectionError('INVALID_ADDRESS', 'Enter a valid canonical Solana public address.');
   }
 
+  // These are read-only evidence reads. A bounded retry avoids a single transient
+  // RPC failure turning the whole assessment into unavailable evidence.
   const operations = [
-    () => connection.getBalance(publicKey, SOLANA_COMMITMENT),
-    () => accountInfoOperation(connection, publicKey),
-    () => connection.getSignaturesForAddress(
+    () => retryRead(() => connection.getBalance(publicKey, SOLANA_COMMITMENT)),
+    () => retryRead(() => accountInfoOperation(connection, publicKey)),
+    () => retryRead(() => connection.getSignaturesForAddress(
       publicKey,
       { limit: SIGNATURE_INSPECTION_LIMIT },
       SOLANA_COMMITMENT,
-    ),
+    )),
   ];
 
   const results = await Promise.allSettled(
