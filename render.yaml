@@ -38,6 +38,8 @@ services:
         value: "true"
       - key: FEATURE_CLIENT_TELEMETRY
         value: "true"
+      - key: FEATURE_BETA_PROGRAM
+        value: "true"
       - key: LOG_LEVEL
         value: info
       - key: GEMINI_MODEL
@@ -45,6 +47,14 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: METRICS_TOKEN
+        sync: false
+      - key: ANALYTICS_WEBHOOK_URL
+        sync: false
+      - key: ANALYTICS_WEBHOOK_TOKEN
+        sync: false
+      - key: FEEDBACK_WEBHOOK_URL
+        sync: false
+      - key: FEEDBACK_WEBHOOK_TOKEN
         sync: false
 
   - type: web
@@ -86,6 +96,8 @@ services:
         value: "true"
       - key: FEATURE_CLIENT_TELEMETRY
         value: "true"
+      - key: FEATURE_BETA_PROGRAM
+        value: "false"
       - key: LOG_LEVEL
         value: info
       - key: GEMINI_MODEL
@@ -93,4 +105,12 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: METRICS_TOKEN
+        sync: false
+      - key: ANALYTICS_WEBHOOK_URL
+        sync: false
+      - key: ANALYTICS_WEBHOOK_TOKEN
+        sync: false
+      - key: FEEDBACK_WEBHOOK_URL
+        sync: false
+      - key: FEEDBACK_WEBHOOK_TOKEN
         sync: false

@@ -61,6 +61,30 @@ const telemetry = await request(`${apiBase}/api/telemetry/event`, {
 });
 check('client telemetry is accepted', telemetry.status === 204, String(telemetry.status));
 
+const analytics = await request(`${apiBase}/api/analytics/event`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    event: 'session_started',
+    participantId: 'smoke-test-participant',
+    sessionId: 'smoke-test-session',
+    properties: { returning: false },
+  }),
+});
+check('anonymous beta analytics is accepted', analytics.status === 202, String(analytics.status));
+
+const invalidAnalytics = await request(`${apiBase}/api/analytics/event`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    event: 'session_started',
+    participantId: 'smoke-test-participant',
+    sessionId: 'smoke-test-session',
+    prompt: 'must not be accepted',
+  }),
+});
+check('analytics rejects raw prompt fields', invalidAnalytics.status === 400, String(invalidAnalytics.status));
+
 const metrics = await request(`${apiBase}/api/metrics`, {
   headers: metricsToken ? { authorization: `Bearer ${metricsToken}` } : {},
 });

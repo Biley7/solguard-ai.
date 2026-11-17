@@ -70,7 +70,7 @@ The API validates `APP_ENV`, HTTPS origins, proxy hops, feature flags, and Devne
 - `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
 - `tests/` — Unit, backend API, integration, and Playwright browser E2E suites, plus deterministic wallet/RPC fixtures.
 - `scripts/lint.mjs` — Syntax and static secret/unsafe-endpoint checks.
-- `docs/` — Architecture, API, data model, security design, and testing evidence.
+- `docs/` — Architecture, API, data model, security design, testing evidence, and the controlled beta operating documents.
 
 Wallet X-Ray is a read-only investigation of the entered public address: balance, account owner/executable metadata, and up to 20 recent Devnet signatures. It cannot establish complete history, account age, beneficial ownership, or whether the wallet is malicious. Risk is heuristic, not a probability or safety guarantee.
 
@@ -94,6 +94,8 @@ The prepared topology is **Vercel static frontend + Render Node web service**, w
 The full setup, DNS, secrets, monitoring, and verification steps are in [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md). Environment contracts and the Mainnet gate are in [docs/PRODUCTION_ENVIRONMENT.md](docs/PRODUCTION_ENVIRONMENT.md). Incident recovery is in [docs/ROLLBACK_PLAN.md](docs/ROLLBACK_PLAN.md).
 
 Production is **blocked** by the open High findings H-04 and H-05 in [docs/SECURITY_AUDIT_FINAL.md](docs/SECURITY_AUDIT_FINAL.md). The production workflow requires manual approval and is not run automatically. Staging and production remain Devnet-only; `ENABLE_MAINNET=true` is rejected by the API and `VITE_ENABLE_MAINNET=true` is rejected by the frontend build. There is no environment flag that enables Mainnet.
+
+The controlled beta is documented in [docs/BETA_LAUNCH_PLAN.md](docs/BETA_LAUNCH_PLAN.md), [docs/USER_FEEDBACK_REPORT.md](docs/USER_FEEDBACK_REPORT.md), and [docs/PRODUCT_METRICS.md](docs/PRODUCT_METRICS.md). No beta participants have been recruited and no user feedback or analytics exist yet.
 
 Deployment smoke checks require running services:
 
@@ -128,4 +130,7 @@ npm run smoke:deployment -- --api http://127.0.0.1:3000 --frontend http://127.0.
 - [Phase 11 deployment guide](docs/DEPLOYMENT_GUIDE.md)
 - [Phase 11 production environment](docs/PRODUCTION_ENVIRONMENT.md)
 - [Phase 11 rollback plan](docs/ROLLBACK_PLAN.md)
+- [Phase 12 controlled beta launch plan](docs/BETA_LAUNCH_PLAN.md)
+- [Phase 12 user feedback report and backlog](docs/USER_FEEDBACK_REPORT.md)
+- [Phase 12 product metrics](docs/PRODUCT_METRICS.md)
 - [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

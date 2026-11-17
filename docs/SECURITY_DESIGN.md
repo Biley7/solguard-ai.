@@ -50,6 +50,7 @@ The risk engine is deterministic and heuristic, with stable indicator codes, sco
 - Enforce strict request body and UTF-8 prompt size limits, per-IP/session rate limiting, and consistent safe error handling around Gemini.
 - Keep secrets in server-side environment configuration; never prefix secrets with Vite's public environment prefix.
 - Do not log prompts or public addresses by default. If operational logging is needed, minimize and redact.
+- Beta analytics is opt-in and limited to an allowlisted event schema. It uses a random participant ID, never a wallet address, and excludes prompts, signatures, and balances. Feedback is structured and rejects wallet-like secrets; both endpoints require a team-owned HTTPS collector outside local development. See `docs/PRODUCT_METRICS.md` for the data contract.
 - Use HTTPS outside local development. The prepared deployment enforces HSTS, a strict script CSP, exact CORS origins, and API security headers; see `docs/DEPLOYMENT_GUIDE.md`.
 - Do not treat CORS, hidden UI controls, or prompts as authorization.
 - Health liveness must not disclose secrets or provider internals and must not imply dependency health unless checks actually run.

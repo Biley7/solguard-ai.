@@ -1,5 +1,6 @@
 import { icon } from '../components/icons.js';
 import { fieldRow, pageHeading, panelHeader, unavailableValue } from '../components/ui.js';
+import { hasAnalyticsConsent, isAnalyticsEnabled } from '../services/analytics.js';
 
 export function settingsPage() {
   return `
@@ -32,5 +33,19 @@ export function settingsPage() {
         <div class="security-rule">${icon('shield')}<span><strong>Explicit authorization</strong><small>Transactions require an intentional user action in Phantom.</small></span></div>
         <div class="security-rule">${icon('info')}<span><strong>Evidence before claims</strong><small>Risk scores are heuristic and never guarantee wallet safety.</small></span></div>
       </section>
+      ${isAnalyticsEnabled() ? `<section class="panel settings-panel beta-settings-panel">
+        ${panelHeader('Controlled beta', 'DEVNET COHORT')}
+        <div class="beta-settings-copy">
+          <p>This workspace is part of a controlled Devnet beta. The welcome guide explains the limits of heuristic security checks, public wallet data, and the always-required Phantom approval.</p>
+          <label class="beta-check beta-settings-consent">
+            <input type="checkbox" data-beta-analytics-consent ${hasAnalyticsConsent() ? 'checked' : ''} />
+            <span><strong>Anonymous product analytics</strong><small>Funnel events and failure categories only. Never prompts, addresses, signatures, balances, or wallet secrets.</small></span>
+          </label>
+        </div>
+        <div class="beta-settings-actions">
+          <button class="button button--secondary" type="button" data-action="open-onboarding">Open welcome guide</button>
+          <button class="button button--primary" type="button" data-action="open-feedback">Share beta feedback</button>
+        </div>
+      </section>` : ''}
     </div>`;
 }

@@ -5,6 +5,8 @@ import { createCorsMiddleware } from './middleware/cors.js';
 import { createLogger } from './observability/logger.js';
 import { metrics as defaultMetrics } from './observability/metrics.js';
 import { createAiRouter } from './routes/ai.js';
+import { createAnalyticsRouter } from './routes/analytics.js';
+import { createFeedbackRouter } from './routes/feedback.js';
 import { createMetricsRouter } from './routes/metrics.js';
 import { createTelemetryRouter } from './routes/telemetry.js';
 
@@ -37,6 +39,8 @@ export function createApp({
   app.use((request, response, next) => {
     const requestId = randomUUID();
     response.locals.requestId = requestId;
+    response.locals.environment = config.appEnvironment;
+    response.locals.appVersion = config.appVersion;
     response.setHeader('X-Request-Id', requestId);
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('X-Frame-Options', 'DENY');
@@ -78,6 +82,7 @@ export function createApp({
       version: config.appVersion,
       network: config.solanaNetwork,
       mainnetEnabled: config.mainnetEnabled,
+      betaProgramEnabled: config.featureBetaProgram,
       uptimeSeconds: Math.floor(process.uptime()),
     });
   });
@@ -90,6 +95,22 @@ export function createApp({
   app.use('/api/telemetry', createTelemetryRouter({
     enabled: config.featureClientTelemetry,
     metricsStore,
+  }));
+
+  app.use('/api/analytics', createAnalyticsRouter({
+    enabled: config.featureBetaProgram,
+    webhookUrl: config.analyticsWebhookUrl,
+    webhookToken: config.analyticsWebhookToken,
+    metricsStore,
+    logger: log,
+  }));
+
+  app.use('/api/feedback', createFeedbackRouter({
+    enabled: config.featureBetaProgram,
+    webhookUrl: config.feedbackWebhookUrl,
+    webhookToken: config.feedbackWebhookToken,
+    metricsStore,
+    logger: log,
   }));
 
   app.use('/api/ai', createAiRouter({

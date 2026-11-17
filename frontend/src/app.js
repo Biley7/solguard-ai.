@@ -35,6 +35,14 @@ import { initTheme, setThemePreference, THEME_LABELS } from './services/theme/th
 import { recordWalletScan } from './services/security/scan-history.js';
 import { apiUrl } from './config/runtime.js';
 import { reportClientEvent } from './services/telemetry.js';
+import {
+  hasAnalyticsConsent,
+  setAnalyticsConsent,
+  startAnalyticsSession,
+  track,
+} from './services/analytics.js';
+import { initBetaOnboarding, openBetaOnboarding } from './components/beta-onboarding.js';
+import { initBetaFeedback, openBetaFeedback } from './components/beta-feedback.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -50,6 +58,7 @@ let walletState = { status: 'disconnected', address: null };
 let balanceState = { status: 'idle', sol: null, observedAt: null };
 let currentIntentResponse = null;
 let pendingTransfer = null;
+let lastInterpretationOutcome = null;
 let toastTimer;
 let activeInterpretationController;
 let lastBalanceRequestAt = 0;
@@ -291,9 +300,11 @@ async function refreshBalance({ notifyError = false, force = false } = {}) {
 async function connectWallet() {
   walletState = { status: 'connecting', address: null };
   renderWalletStatus();
+  track('wallet_connect_started');
   try {
     const state = await phantomWallet.connect();
     if (state?.status === 'connected' && state.address) {
+      track('wallet_connect_succeeded');
       showToast(`Phantom connected: ${shortenAddress(state.address)}.`, 'success');
     }
   } catch (error) {
@@ -302,6 +313,11 @@ async function connectWallet() {
       address: null,
     };
     renderWalletStatus();
+    track('wallet_connect_failed', {
+      reason: error?.code === 'USER_REJECTED'
+        ? 'user_rejected'
+        : error?.code === 'PROVIDER_UNAVAILABLE' ? 'provider_unavailable' : 'technical_failure',
+    });
     const message = error instanceof PhantomWalletError
       ? error.message
       : 'Could not connect to Phantom.';
@@ -375,8 +391,9 @@ function trapSidebarFocus(event) {
   return false;
 }
 
-function renderView(viewName, { updateHistory = true, focus = false } = {}) {
+function   renderView(viewName, { updateHistory = true, focus = false } = {}) {
   const view = views[viewName] ? viewName : 'dashboard';
+  lastInterpretationOutcome = null;
   activeInterpretationController?.abort('superseded');
   activeInterpretationController = null;
   currentIntentResponse = null;
@@ -486,6 +503,10 @@ async function handleCopilotSubmit(form) {
     feedback.className = 'form-feedback';
   }
 
+  if (['clarification', 'unsupported', 'failed'].includes(lastInterpretationOutcome)) {
+    track('ai_interpretation_corrected', { outcome: lastInterpretationOutcome });
+  }
+  track('ai_submission_started');
   try {
     const response = await fetch(apiUrl('/api/ai/interpret'), {
       method: 'POST',
@@ -495,6 +516,8 @@ async function handleCopilotSubmit(form) {
     });
     const payload = await response.json();
     if (!response.ok) {
+      lastInterpretationOutcome = 'failed';
+      track('ai_failed', { reason: `http_${response.status}` });
       const message = payload.error?.message || 'The interpretation request was rejected.';
       currentIntentResponse = null;
       const errorView = intentRequestErrorView(message);
@@ -506,11 +529,23 @@ async function handleCopilotSubmit(form) {
       return;
     }
     renderCopilotResponse(payload);
-    if (payload.status !== 'ready') {
+    lastInterpretationOutcome = payload.status;
+    if (payload.status === 'ready') {
+      track('ai_intent_ready');
+    } else if (payload.status === 'unsupported') {
+      track('ai_unsupported', { outcome: payload.status });
+    } else {
+      track('ai_clarification', { outcome: payload.status });
       setFeedback(form, payload.clarificationQuestion || payload.explanation, 'info');
     }
   } catch (error) {
     if (controller.signal.reason === 'superseded') return;
+    lastInterpretationOutcome = 'failed';
+    track('ai_failed', {
+      reason: controller.signal.reason === 'timeout'
+        ? 'timeout'
+        : navigator.onLine === false ? 'offline' : 'network',
+    });
     reportClientEvent('client_api_failure', 'interpretation');
     currentIntentResponse = null;
     const message = controller.signal.reason === 'timeout'
@@ -596,6 +631,7 @@ async function scanIntentRecipients(button) {
       prepareSolTransferTransaction,
       summarizeTransactionRisk,
     } = await loadBlockchainModules();
+    track('scan_started', { view: 'transfer_preflight' });
     const results = await Promise.all(intent.recipients.map(async (recipient) => {
       try {
         const report = await inspectWalletSecurity(recipient.address);
@@ -659,7 +695,9 @@ async function scanIntentRecipients(button) {
       ${markup}
     </div>`).join('');
     const riskSummary = summarizeTransactionRisk(results.map(({ report }) => report));
+    track('scan_completed', { outcome: riskSummary.status === 'assessed' ? 'assessed' : 'unverified' });
     if (riskSummary.status !== 'assessed') {
+      track('preview_failed', { reason: 'unverified_recipient' });
       stage.innerHTML = reviewStageHeader(
         'Security review blocked',
         'At least one recipient could not be verified. The transfer cannot be prepared from an unverified assessment.',
@@ -675,6 +713,7 @@ async function scanIntentRecipients(button) {
     ) + `<div class="review-recipient-checks">${checksMarkup}</div>`
       + `<div class="review-simulation-loading" role="status"><span class="processing-spinner">${icon('loader-circle')}</span><span><strong>Simulating one atomic transaction</strong><small>Checking recipient account types, sender funds, network fee, and the complete Devnet transaction.</small></span></div>`;
 
+    track('preview_started');
     const prepared = await prepareSolTransferTransaction({
       intent,
       payerAddress,
@@ -683,6 +722,7 @@ async function scanIntentRecipients(button) {
     if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
       || document.getElementById('intent-review-stage') !== stage) return;
     pendingTransfer = { prepared, riskSummary: prepared.riskSummary, payerAddress };
+    track('preview_ready');
     stage.innerHTML = reviewStageHeader(
       'Security review complete',
       'The transfer is prepared and simulated. Check every field below before choosing whether to open Phantom.',
@@ -692,6 +732,9 @@ async function scanIntentRecipients(button) {
   } catch (error) {
     if (interpretation !== currentIntentResponse || walletState.address !== payerAddress
       || document.getElementById('intent-review-stage') !== stage) return;
+    track('preview_failed', {
+      reason: error?.name === 'TransactionPreparationError' ? 'preparation_rejected' : 'technical_failure',
+    });
     const message = error?.name === 'TransactionPreparationError'
       ? error.message
       : 'The Devnet transaction could not be safely prepared.';
@@ -711,6 +754,7 @@ function editPreparedTransfer() {
   pendingTransfer = null;
   const stage = document.getElementById('intent-review-stage');
   const hadReview = Boolean(stage?.innerHTML.trim());
+  if (hadReview) track('preview_cancelled', { reason: 'edit_request' });
   if (stage) stage.innerHTML = '';
   focusCopilotPrompt();
   if (hadReview) showToast('Review cleared. Edit the request and interpret it again.');
@@ -732,6 +776,7 @@ function dismissCancelDialog(button) {
 
 function confirmCancelTransfer(button) {
   pendingTransfer = null;
+  track('transaction_cancelled', { reason: 'user_discarded_preview' });
   button.closest('[data-cancel-dialog]')?.close();
   const stage = document.getElementById('intent-review-stage');
   if (stage) stage.innerHTML = '';
@@ -788,6 +833,10 @@ async function approvePreparedTransfer(button) {
       connection: getDevnetConnection(),
       onProgress: (event) => {
         if (event.status === 'awaiting_approval') executionProgress.awaiting = true;
+        if (event.status === 'submitted' && !executionProgress.submitted) track('transaction_submitted');
+        if (event.status === 'confirmed' && executionProgress.status !== 'confirmed') {
+          track('transaction_confirmed');
+        }
         if (['submitted', 'confirming', 'confirmed'].includes(event.status)) executionProgress.submitted = true;
         if (event.status === 'confirming') executionProgress.confirming = true;
         if (event.stage) executionProgress.failureStage = event.stage;
@@ -805,7 +854,12 @@ async function approvePreparedTransfer(button) {
     pendingTransfer = null;
     if (result.status === 'confirmed') {
       showToast('The transaction was confirmed on Solana Devnet.', 'success');
+    } else if (result.status === 'failed') {
+      track('transaction_failed', { reason: result.errorCode ?? 'confirmation_failed' });
+      reportClientEvent('transaction_confirmation_failure', 'confirmation');
+      showToast('The transaction was submitted but failed on Solana Devnet. Check its Explorer status before retrying.', 'warning');
     } else {
+      track('transaction_confirmation_pending', { outcome: result.status });
       reportClientEvent('transaction_confirmation_failure', 'confirmation');
       showToast('The transaction was submitted but is not confirmed. Check its Devnet Explorer status before retrying.', 'warning');
     }
@@ -834,6 +888,9 @@ async function approvePreparedTransfer(button) {
           : executionProgress.submitted
             ? 'confirmation'
             : executionProgress.awaiting ? 'approval' : 'preparing');
+    track(rejected ? 'transaction_signing_rejected' : 'transaction_failed', {
+      reason: rejected ? 'user_rejected' : code,
+    });
     if (!rejected) {
       if (failureStage === 'submitted') {
         reportClientEvent('transaction_submission_failure', 'submission');
@@ -894,6 +951,7 @@ async function handleAddressSubmit(form) {
   }
   const inspectionMeta = form.closest('.main-content')?.querySelector('[data-inspection-meta]');
 
+  track('scan_started', { view: kind });
   const originalButton = submitButton.innerHTML;
   submitButton.disabled = true;
   submitButton.setAttribute('aria-busy', 'true');
@@ -924,10 +982,15 @@ async function handleAddressSubmit(form) {
         ? 'UNVERIFIED'
         : `${report.riskAssessment.category.toUpperCase()} RISK · DEVNET`;
     }
+    track('scan_completed', {
+      view: kind,
+      outcome: report.riskAssessment.status === 'unavailable' ? 'unverified' : 'assessed',
+    });
     if (report.riskAssessment.status === 'unavailable' && feedback) {
       setFeedback(form, 'Some required Devnet reads failed. This result is unverified, not low risk.', 'warning');
     }
   } catch (error) {
+    track('scan_failed', { view: kind, reason: 'technical_failure' });
     reportClientEvent('rpc_failure', 'inspection');
     const message = error?.name === 'WalletInspectionError'
       ? error.message
@@ -1096,6 +1159,10 @@ function onClick(event) {
     } else {
       void copyWalletAddress();
     }
+  } else if (action === 'open-onboarding') {
+    openBetaOnboarding({ force: true });
+  } else if (action === 'open-feedback') {
+    openBetaFeedback();
   }
 }
 
@@ -1160,6 +1227,14 @@ export function mountApp() {
       if (approvalButton) approvalButton.disabled = !event.target.checked;
     }
     if (event.target.matches('#history-status')) renderSessionActivity();
+    if (event.target.matches('[data-beta-analytics-consent]')) {
+      const granted = event.target.checked;
+      setAnalyticsConsent(granted);
+      if (granted) startAnalyticsSession();
+      showToast(granted
+        ? 'Anonymous product analytics enabled. Settings can change this at any time.'
+        : 'Anonymous product analytics disabled. Existing local session data remains in this browser.', 'info');
+    }
   });
   phantomWallet.subscribe((state) => {
     walletState = state;
@@ -1196,6 +1271,8 @@ export function mountApp() {
   });
 
   renderView(window.location.hash.slice(1) || 'dashboard', { updateHistory: false });
+  initBetaFeedback();
+  initBetaOnboarding();
   syncSidebarViewport();
   void phantomWallet.restore().catch((error) => {
     showToast(error instanceof PhantomWalletError ? error.message : 'Could not restore the Phantom connection.', 'warning');

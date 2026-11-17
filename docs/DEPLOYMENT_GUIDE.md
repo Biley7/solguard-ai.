@@ -89,12 +89,16 @@ These are console/CLI actions, not actions this repository can perform without y
 | Preview | `VITE_SOLANA_RPC_URL` | `https://api.devnet.solana.com` |
 | Preview | `VITE_ENABLE_MAINNET` | `false` |
 | Preview | `VITE_FEATURE_TELEMETRY` | `true` |
+| Preview | `VITE_BETA_ENABLED` | `true` |
+| Preview | `VITE_FEATURE_ANALYTICS` | `true` |
 | Production | `VITE_APP_ENV` | `production` |
 | Production | `VITE_API_BASE_URL` | `https://api.solguard.example` |
 | Production | `VITE_SOLANA_NETWORK` | `devnet` |
 | Production | `VITE_SOLANA_RPC_URL` | `https://api.devnet.solana.com` |
 | Production | `VITE_ENABLE_MAINNET` | `false` |
 | Production | `VITE_FEATURE_TELEMETRY` | `true` |
+| Production | `VITE_BETA_ENABLED` | `false` until the beta retention/consent review is complete |
+| Production | `VITE_FEATURE_ANALYTICS` | `false` until the beta retention/consent review is complete |
 
 Never create `VITE_GEMINI_API_KEY`, `VITE_METRICS_TOKEN`, or any other secret as a `VITE_*` variable. Vite exposes those values to every browser.
 
@@ -116,6 +120,10 @@ This app uses hash URLs (`/#copilot`, `/#settings`), so no catch-all rewrite is 
    - `GEMINI_API_KEY` (set an actual key or leave empty to use fallback)
    - `METRICS_TOKEN` (generate a long random value)
    - `APP_VERSION` for production (release identifier)
+   - `ANALYTICS_WEBHOOK_URL` and `ANALYTICS_WEBHOOK_TOKEN` (optional; required for durable beta events)
+   - `FEEDBACK_WEBHOOK_URL` and `FEEDBACK_WEBHOOK_TOKEN` (required for the in-app feedback form to accept submissions)
+
+   The staging service has `FEATURE_BETA_PROGRAM=true`; production keeps it `false` in `render.yaml` until a separate beta privacy/retention review approves it. Use team-owned HTTPS collectors, not a public bucket or personal inbox.
 4. Add custom domains in each service's Settings:
    - staging: `api-staging.solguard.example`
    - production: `api.solguard.example`

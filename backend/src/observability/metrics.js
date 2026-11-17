@@ -32,6 +32,12 @@ export class MetricsRegistry {
     this.rateLimited = 0;
     this.clientEvents = 0;
     this.telemetryRejected = 0;
+    this.productEvents = {};
+    this.participants = new Set();
+    this.sessions = new Set();
+    this.returningParticipants = new Set();
+    this.feedbackAccepted = 0;
+    this.feedbackFailed = 0;
   }
 
   recordRequest({ route = 'unmatched', status = 500, durationMs = 0 }) {
@@ -75,6 +81,18 @@ export class MetricsRegistry {
     this.events.telemetry_rejected = (this.events.telemetry_rejected ?? 0) + 1;
   }
 
+  recordProductEvent({ event, participantId, sessionId, returning = false }) {
+    this.productEvents[event] = (this.productEvents[event] ?? 0) + 1;
+    if (participantId) this.participants.add(participantId);
+    if (sessionId) this.sessions.add(sessionId);
+    if (returning && participantId) this.returningParticipants.add(participantId);
+  }
+
+  recordFeedback({ accepted }) {
+    if (accepted) this.feedbackAccepted += 1;
+    else this.feedbackFailed += 1;
+  }
+
   recordError() {
     this.events.unhandled_api_error = (this.events.unhandled_api_error ?? 0) + 1;
   }
@@ -112,6 +130,16 @@ export class MetricsRegistry {
             .filter(([key]) => key.startsWith('client_'))
             .map(([key, value]) => [key.slice('client_'.length), value]),
         ),
+      },
+      beta: {
+        participants: this.participants.size,
+        sessions: this.sessions.size,
+        returningParticipants: this.returningParticipants.size,
+        events: { ...this.productEvents },
+        feedback: {
+          accepted: this.feedbackAccepted,
+          failed: this.feedbackFailed,
+        },
       },
       events: { ...this.events },
     };

@@ -22,6 +22,11 @@
 | `ENABLE_MAINNET` | `false` | `false` | No | `true` prevents startup. |
 | `FEATURE_AI_INTERPRETATION` | `true` | `true` | No | Disabling returns `503 AI_DISABLED`. |
 | `FEATURE_CLIENT_TELEMETRY` | `true` | `true` | No | Sanitized failure categories only. |
+| `FEATURE_BETA_PROGRAM` | `true` | `false` | No | Enables analytics/feedback routes. Production stays off until beta privacy review. |
+| `ANALYTICS_WEBHOOK_URL` | staging collector | empty | **For beta** | Team-owned HTTPS collector; no prompts or wallets. |
+| `ANALYTICS_WEBHOOK_TOKEN` | secret | empty | No | Optional Bearer token for the analytics collector. |
+| `FEEDBACK_WEBHOOK_URL` | staging collector | empty | **For beta** | Required for in-app feedback to accept submissions. |
+| `FEEDBACK_WEBHOOK_TOKEN` | secret | empty | No | Optional Bearer token for the feedback collector. |
 | `LOG_LEVEL` | `info` | `info` | No | `debug` is local-only by default. |
 | `GEMINI_API_KEY` | key | key | **Yes** | Render secret store only. Server-side. Never `VITE_*`. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | `gemini-2.5-flash` | No | Must match the allowlist regex. |
@@ -37,6 +42,8 @@
 | `VITE_SOLANA_RPC_URL` | `https://api.devnet.solana.com` | same | Must be HTTPS and non-Mainnet. |
 | `VITE_ENABLE_MAINNET` | `false` | `false` | Build fails if `true`. |
 | `VITE_FEATURE_TELEMETRY` | `true` | `true` | Client sends categories only. |
+| `VITE_BETA_ENABLED` | `true` | `false` | Shows first-run guide and beta settings. |
+| `VITE_FEATURE_ANALYTICS` | `true` | `false` | Client opt-in switch; still requires user consent. |
 
 No other `VITE_*` value may contain a credential. `GEMINI_API_KEY` and `METRICS_TOKEN` are never frontend variables.
 
@@ -116,6 +123,9 @@ Until all seven gates are signed off, `ENABLE_MAINNET` must remain `false` and t
 |---|---|---|
 | `FEATURE_AI_INTERPRETATION` | `true` | `false` returns `503 AI_DISABLED`; does not call Gemini. |
 | `FEATURE_CLIENT_TELEMETRY` | `true` | `false` makes `/api/telemetry/event` unavailable. |
+| `FEATURE_BETA_PROGRAM` | `true` on staging; `false` on production | `false` disables `/api/analytics` and `/api/feedback`. |
+| `VITE_BETA_ENABLED` | `true` on staging; `false` on production | Client-side beta surfaces. |
+| `VITE_FEATURE_ANALYTICS` | `true` on staging; `false` on production | Client must still opt in; disabling prevents all events. |
 | `ENABLE_MAINNET` | `false` | Locked off; `true` aborts startup. |
 | `ALLOW_VERCEL_PREVIEWS` | staging only | Allows `*.vercel.app` browser origins on staging. Production rejects it. |
 | `VITE_FEATURE_TELEMETRY` | `true` | Client-side switch; failure categories only. |

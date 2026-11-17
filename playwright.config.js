@@ -39,6 +39,10 @@ export default defineConfig({
       reuseExistingServer: false,
       env: {
         PORT: String(BACKEND_PORT),
+        // Existing end-to-end coverage targets the core transaction flow. The
+        // first-run beta guide is verified separately with beta flags enabled.
+        VITE_BETA_ENABLED: 'false',
+        VITE_FEATURE_ANALYTICS: 'false',
       },
     },
   ],

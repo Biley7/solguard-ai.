@@ -24,6 +24,24 @@ function parseInteger(value, fallback, name, { min = 0 } = {}) {
   return parsed;
 }
 
+function parseOptionalUrl(value, name, appEnvironment) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`${name} must be a valid URL.`);
+  }
+  if (appEnvironment !== 'local' && parsed.protocol !== 'https:') {
+    throw new Error(`${name} must use HTTPS outside local development.`);
+  }
+  if (/mainnet/i.test(parsed.hostname)) {
+    throw new Error(`${name} must not point at a Mainnet endpoint.`);
+  }
+  return parsed.toString();
+}
+
 function parseOrigins(value, appEnvironment) {
   const configured = String(value ?? '')
     .split(',')
@@ -92,6 +110,23 @@ export function loadRuntimeConfig(environment = process.env) {
 
   return {
     appEnvironment,
+    analyticsWebhookUrl: parseOptionalUrl(
+      environment.ANALYTICS_WEBHOOK_URL,
+      'ANALYTICS_WEBHOOK_URL',
+      appEnvironment,
+    ),
+    analyticsWebhookToken: (environment.ANALYTICS_WEBHOOK_TOKEN ?? '').trim(),
+    feedbackWebhookUrl: parseOptionalUrl(
+      environment.FEEDBACK_WEBHOOK_URL,
+      'FEEDBACK_WEBHOOK_URL',
+      appEnvironment,
+    ),
+    feedbackWebhookToken: (environment.FEEDBACK_WEBHOOK_TOKEN ?? '').trim(),
+    featureBetaProgram: parseBoolean(
+      environment.FEATURE_BETA_PROGRAM,
+      true,
+      'FEATURE_BETA_PROGRAM',
+    ),
     appVersion: (environment.APP_VERSION ?? '0.1.0').trim(),
     solanaNetwork,
     mainnetEnabled: false,
