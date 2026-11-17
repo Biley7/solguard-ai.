@@ -1,0 +1,14 @@
+# Never upload local environments or generated evidence to a hosting build.
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+perf-artifacts/
+playwright-report/
+test-results/
+tests/
+docs/
+.git/
+.DS_Store

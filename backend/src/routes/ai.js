@@ -4,10 +4,25 @@ import { interpretNaturalLanguage } from '../services/gemini/intent-interpreter.
 
 const MAX_PROMPT_BYTES = 1_800;
 
-export function createAiRouter({ interpret = interpretNaturalLanguage } = {}) {
+export function createAiRouter({
+  interpret = interpretNaturalLanguage,
+  enabled = true,
+  metricsStore,
+} = {}) {
   const router = Router();
 
   router.post('/interpret', aiInterpretRateLimit, async (request, response, next) => {
+    if (!enabled) {
+      response.status(503).json({
+        error: {
+          code: 'AI_DISABLED',
+          message: 'AI interpretation is temporarily disabled.',
+          requestId: response.locals.requestId,
+        },
+      });
+      return;
+    }
+
     const body = request.body;
     if (
       !body
@@ -31,6 +46,7 @@ export function createAiRouter({ interpret = interpretNaturalLanguage } = {}) {
 
     try {
       const result = await interpret(body.prompt.trim());
+      metricsStore?.recordAiResult(result);
       response.json(result);
     } catch (error) {
       next(error);

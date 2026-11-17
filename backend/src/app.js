@@ -1,17 +1,38 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
+import { loadRuntimeConfig } from './config/runtime.js';
+import { createCorsMiddleware } from './middleware/cors.js';
+import { createLogger } from './observability/logger.js';
+import { metrics as defaultMetrics } from './observability/metrics.js';
 import { createAiRouter } from './routes/ai.js';
+import { createMetricsRouter } from './routes/metrics.js';
+import { createTelemetryRouter } from './routes/telemetry.js';
 
-export function createApp({ interpretIntent } = {}) {
+function routeLabel(request) {
+  if (!request.route?.path) return 'unmatched';
+  return `${request.baseUrl ?? ''}${request.route.path}` || 'unmatched';
+}
+
+export function createApp({
+  interpretIntent,
+  config = loadRuntimeConfig(),
+  logger,
+  metricsStore = defaultMetrics,
+} = {}) {
   const app = express();
-  const trustedProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  const log = logger ?? createLogger({
+    level: config.logLevel,
+    base: {
+      service: 'solguard-api',
+      environment: config.appEnvironment,
+      version: config.appVersion,
+    },
+  });
 
-  if (!Number.isInteger(trustedProxyHops) || trustedProxyHops < 0) {
-    throw new Error('TRUST_PROXY_HOPS must be a non-negative integer.');
-  }
-
+  app.locals.config = config;
+  app.locals.logger = log;
   app.disable('x-powered-by');
-  app.set('trust proxy', trustedProxyHops);
+  app.set('trust proxy', config.trustProxyHops);
 
   app.use((request, response, next) => {
     const requestId = randomUUID();
@@ -22,16 +43,60 @@ export function createApp({ interpretIntent } = {}) {
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     response.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+    response.setHeader('Cache-Control', 'no-store');
+    if (config.https) {
+      response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+
+    const startedAt = process.hrtime.bigint();
+    response.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      const route = routeLabel(request);
+      metricsStore.recordRequest({
+        route,
+        status: response.statusCode,
+        durationMs,
+      });
+      log.info('api.request', {
+        requestId,
+        method: request.method,
+        route,
+        status: response.statusCode,
+        durationMs: Number(durationMs.toFixed(2)),
+      });
+    });
     next();
   });
 
+  app.use(createCorsMiddleware(config));
   app.use(express.json({ limit: '8kb', strict: true }));
 
   app.get('/api/health', (_request, response) => {
-    response.json({ status: 'ok' });
+    response.json({
+      status: 'ok',
+      environment: config.appEnvironment,
+      version: config.appVersion,
+      network: config.solanaNetwork,
+      mainnetEnabled: config.mainnetEnabled,
+      uptimeSeconds: Math.floor(process.uptime()),
+    });
   });
 
-  app.use('/api/ai', createAiRouter({ interpret: interpretIntent }));
+  app.use('/api/metrics', createMetricsRouter({
+    token: config.metricsToken,
+    metricsStore,
+  }));
+
+  app.use('/api/telemetry', createTelemetryRouter({
+    enabled: config.featureClientTelemetry,
+    metricsStore,
+  }));
+
+  app.use('/api/ai', createAiRouter({
+    interpret: interpretIntent,
+    enabled: config.featureAiInterpretation,
+    metricsStore,
+  }));
 
   app.use((_request, response) => {
     response.status(404).json({
@@ -71,10 +136,12 @@ export function createApp({ interpretIntent } = {}) {
       return;
     }
 
-    console.error('Unhandled API request error', {
+    metricsStore.recordError();
+    log.error('api.unhandled_error', {
       requestId: response.locals.requestId,
-      errorName: error.name,
-    });
+      route: routeLabel(_request),
+      status: 500,
+    }, error);
     response.status(500).json({
       error: {
         code: 'INTERNAL_ERROR',

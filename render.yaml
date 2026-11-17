@@ -1,0 +1,96 @@
+services:
+  - type: web
+    name: solguard-api-staging
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start:staging
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 30
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: APP_VERSION
+        value: staging
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: ALLOWED_ORIGINS
+        value: https://staging.solguard.example
+      - key: ALLOW_VERCEL_PREVIEWS
+        value: "true"
+      - key: SOLANA_NETWORK
+        value: devnet
+      - key: ENABLE_MAINNET
+        value: "false"
+      - key: FEATURE_AI_INTERPRETATION
+        value: "true"
+      - key: FEATURE_CLIENT_TELEMETRY
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: METRICS_TOKEN
+        sync: false
+
+  - type: web
+    name: solguard-api-production
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start:production
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 30
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: APP_VERSION
+        sync: false
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: ALLOWED_ORIGINS
+        value: https://solguard.example
+      - key: ALLOW_VERCEL_PREVIEWS
+        value: "false"
+      - key: SOLANA_NETWORK
+        value: devnet
+      - key: ENABLE_MAINNET
+        value: "false"
+      - key: FEATURE_AI_INTERPRETATION
+        value: "true"
+      - key: FEATURE_CLIENT_TELEMETRY
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: METRICS_TOKEN
+        sync: false

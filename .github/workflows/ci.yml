@@ -29,6 +29,9 @@ jobs:
       - name: Lint and static security checks
         run: npm run lint
 
+      - name: Validate deployment policy
+        run: npm run check:deployment
+
       - name: Unit tests
         run: npm run test:unit
 
@@ -37,6 +40,9 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Verify the build contains no secrets
+        run: npm run check:secrets
 
       - name: Audit production dependencies
         run: npm audit --audit-level=high

@@ -1,0 +1,244 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment target
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      ref:
+        description: Git ref or commit SHA to deploy
+        required: true
+        default: main
+        type: string
+      confirm_production:
+        description: Type DEPLOY to confirm a production deployment
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    name: Deploy staging
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate deployment policy
+        run: npm run check:deployment
+
+      - name: Build production frontend
+        run: npm run build
+        env:
+          VITE_APP_ENV: staging
+          VITE_API_BASE_URL: ${{ vars.STAGING_API_URL }}
+          VITE_SOLANA_NETWORK: devnet
+          VITE_SOLANA_RPC_URL: https://api.devnet.solana.com
+          VITE_ENABLE_MAINNET: "false"
+          VITE_FEATURE_TELEMETRY: "true"
+
+      - name: Verify no secrets are in the build
+        run: npm run check:secrets
+        env:
+          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+
+      - name: Trigger staging API deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK" > /dev/null
+
+      - name: Wait for staging API health
+        run: node scripts/wait-for-health.mjs --api "$STAGING_API_URL" --environment staging
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel staging configuration
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build Vercel artifacts
+        run: vercel build --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_APP_ENV: staging
+          VITE_API_BASE_URL: ${{ vars.STAGING_API_URL }}
+          VITE_SOLANA_NETWORK: devnet
+          VITE_SOLANA_RPC_URL: https://api.devnet.solana.com
+          VITE_ENABLE_MAINNET: "false"
+          VITE_FEATURE_TELEMETRY: "true"
+
+      - name: Deploy and alias staging frontend
+        id: vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          STAGING_FRONTEND_HOST: ${{ vars.STAGING_FRONTEND_HOST }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" | tail -n 1)"
+          vercel alias set "$deployment_url" "$STAGING_FRONTEND_HOST" --token="$VERCEL_TOKEN"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test staging
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+          STAGING_FRONTEND_URL: ${{ vars.STAGING_FRONTEND_URL }}
+          STAGING_METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+        run: >-
+          node scripts/smoke-deployment.mjs
+          --api "$STAGING_API_URL"
+          --frontend "$STAGING_FRONTEND_URL"
+          --origin "$STAGING_FRONTEND_URL"
+          --metrics-token "$STAGING_METRICS_TOKEN"
+          --expect-edge-headers
+
+  production:
+    name: Deploy production (manual approval required)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Require explicit production confirmation
+        if: github.event.inputs.confirm_production != 'DEPLOY'
+        run: |
+          echo 'Production deployment requires confirm_production=DEPLOY.'
+          exit 1
+
+      - name: Check out the approved ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate deployment policy
+        run: npm run check:deployment
+
+      - name: Confirm the release is not Mainnet
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import { loadRuntimeConfig } from './backend/src/config/runtime.js'; const c = loadRuntimeConfig(); if (c.mainnetEnabled || c.solanaNetwork !== 'devnet') process.exit(1); console.log('Devnet-only configuration confirmed');"
+        env:
+          APP_ENV: production
+          ALLOWED_ORIGINS: ${{ vars.PRODUCTION_FRONTEND_URL }}
+          TRUST_PROXY_HOPS: "1"
+          SOLANA_NETWORK: devnet
+          ENABLE_MAINNET: "false"
+
+      - name: Build production frontend
+        run: npm run build
+        env:
+          VITE_APP_ENV: production
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_SOLANA_NETWORK: devnet
+          VITE_SOLANA_RPC_URL: https://api.devnet.solana.com
+          VITE_ENABLE_MAINNET: "false"
+          VITE_FEATURE_TELEMETRY: "true"
+
+      - name: Verify no secrets are in the build
+        run: npm run check:secrets
+        env:
+          METRICS_TOKEN: ${{ secrets.PRODUCTION_METRICS_TOKEN }}
+
+      - name: Trigger production API deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK" > /dev/null
+
+      - name: Wait for production API health
+        run: node scripts/wait-for-health.mjs --api "$PRODUCTION_API_URL" --environment production
+        env:
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel production configuration
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build Vercel artifacts
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_APP_ENV: production
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_SOLANA_NETWORK: devnet
+          VITE_SOLANA_RPC_URL: https://api.devnet.solana.com
+          VITE_ENABLE_MAINNET: "false"
+          VITE_FEATURE_TELEMETRY: "true"
+
+      - name: Deploy production frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Smoke test production
+        env:
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+          PRODUCTION_FRONTEND_URL: ${{ vars.PRODUCTION_FRONTEND_URL }}
+          PRODUCTION_METRICS_TOKEN: ${{ secrets.PRODUCTION_METRICS_TOKEN }}
+        run: >-
+          node scripts/smoke-deployment.mjs
+          --api "$PRODUCTION_API_URL"
+          --frontend "$PRODUCTION_FRONTEND_URL"
+          --origin "$PRODUCTION_FRONTEND_URL"
+          --metrics-token "$PRODUCTION_METRICS_TOKEN"
+          --expect-edge-headers

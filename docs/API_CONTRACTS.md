@@ -8,11 +8,37 @@ All API responses use UTF-8 JSON. The backend never returns a Gemini credential,
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "environment": "staging",
+  "version": "staging",
+  "network": "devnet",
+  "mainnetEnabled": false,
+  "uptimeSeconds": 42
 }
 ```
 
-This indicates only that the Express process can answer requests; it does not report Gemini or Solana RPC availability.
+This indicates only that the Express process can answer requests; it does not report Gemini or Solana RPC availability. `mainnetEnabled` is always `false` in the current codebase; the server refuses to start with `ENABLE_MAINNET=true` or a non-Devnet `SOLANA_NETWORK`.
+
+## `POST /api/telemetry/event`
+
+Accepts a sanitized client failure category. It is not an error log and must not receive prompts, wallet addresses, signatures, balances, provider messages, or free text.
+
+```json
+{
+  "event": "rpc_failure",
+  "stage": "balance"
+}
+```
+
+Allowed events: `rpc_failure`, `transaction_submission_failure`, `transaction_confirmation_failure`, `client_api_failure`. Allowed stages: `balance`, `inspection`, `recipient_scan`, `simulation`, `signing`, `submission`, `confirmation`, `interpretation`. Unknown fields, events, or stages return `400 INVALID_TELEMETRY_EVENT`. Accepted events return `204` with no body. The endpoint is rate-limited to 30 events per 60 seconds per IP and can be disabled with `FEATURE_CLIENT_TELEMETRY=false`.
+
+## `GET /api/metrics`
+
+Returns aggregate in-memory metrics only when `METRICS_TOKEN` is configured and the request presents `Authorization: Bearer <token>`. Without a valid token the route returns `404 NOT_FOUND`, hiding its existence. The snapshot contains request totals by status and route template, latency p50/p95/max, AI outcome counts, Gemini fallback/failure counts, rate-limit counts, and allowlisted client event counts. It contains no prompts, addresses, signatures, balances, or secrets.
+
+## CORS and origin policy
+
+Browser requests with an `Origin` header must match `ALLOWED_ORIGINS` exactly. A foreign origin receives `403 ORIGIN_NOT_ALLOWED` before routing. `OPTIONS` preflight receives `204` with the allowed origin, methods `GET,POST,OPTIONS`, and `content-type` header. Staging may opt into `https://solguard-*.vercel.app` preview origins with `ALLOW_VERCEL_PREVIEWS=true`; unrelated Vercel apps are rejected, and production rejects the setting entirely.
 
 ## `POST /api/ai/interpret`
 
@@ -74,9 +100,12 @@ Error codes are stable API identifiers:
 |---|---|---|
 | 400 | `INVALID_REQUEST` | Invalid JSON shape, empty prompt, unknown property, or prompt exceeds the byte limit. |
 | 413 | `REQUEST_TOO_LARGE` | JSON body exceeds the parser limit. |
+| 400 | `INVALID_TELEMETRY_EVENT` | Telemetry event or field is not allowlisted. |
+| 403 | `ORIGIN_NOT_ALLOWED` | Browser origin is not in the API allowlist. |
 | 429 | `RATE_LIMITED` | Per-IP request limit exceeded. |
 | 500 | `INTERNAL_ERROR` | Unexpected backend failure; response exposes only a request ID. |
-| 404 | `NOT_FOUND` | Unknown API route. |
+| 503 | `AI_DISABLED` | AI interpretation was disabled by feature flag. |
+| 404 | `NOT_FOUND` | Unknown API route or hidden metrics route without a valid token. |
 
 Gemini provider failure is not exposed as an error if deterministic fallback can respond. The UI clearly identifies the fallback. Prompts are not logged by this service.
 

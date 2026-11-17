@@ -33,6 +33,8 @@ import {
 } from './components/transaction-confirmation.js';
 import { initTheme, setThemePreference, THEME_LABELS } from './services/theme/theme.js';
 import { recordWalletScan } from './services/security/scan-history.js';
+import { apiUrl } from './config/runtime.js';
+import { reportClientEvent } from './services/telemetry.js';
 
 const views = {
   dashboard: { label: 'Command Center', render: dashboardPage },
@@ -277,6 +279,7 @@ async function refreshBalance({ notifyError = false, force = false } = {}) {
     balanceState = { status: 'loaded', sol: balance.sol, observedAt: balance.observedAt };
   } catch {
     if (walletState.address !== address) return;
+    reportClientEvent('rpc_failure', 'balance');
     balanceState = { status: 'error', sol: null, observedAt: null };
     if (notifyError) {
       showToast('Could not retrieve the balance from Solana Devnet. Check your connection and retry.', 'warning');
@@ -484,7 +487,7 @@ async function handleCopilotSubmit(form) {
   }
 
   try {
-    const response = await fetch('/api/ai/interpret', {
+    const response = await fetch(apiUrl('/api/ai/interpret'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt }),
@@ -508,6 +511,7 @@ async function handleCopilotSubmit(form) {
     }
   } catch (error) {
     if (controller.signal.reason === 'superseded') return;
+    reportClientEvent('client_api_failure', 'interpretation');
     currentIntentResponse = null;
     const message = controller.signal.reason === 'timeout'
       ? 'The interpretation request timed out. Check your connection, then try again.'
@@ -601,6 +605,7 @@ async function scanIntentRecipients(button) {
           markup: walletInspectionView(report, { compact: true }),
         };
       } catch (error) {
+        reportClientEvent('rpc_failure', 'recipient_scan');
         const message = error?.name === 'WalletInspectionError'
           ? error.message
           : 'Devnet inspection could not be completed.';
@@ -801,6 +806,7 @@ async function approvePreparedTransfer(button) {
     if (result.status === 'confirmed') {
       showToast('The transaction was confirmed on Solana Devnet.', 'success');
     } else {
+      reportClientEvent('transaction_confirmation_failure', 'confirmation');
       showToast('The transaction was submitted but is not confirmed. Check its Devnet Explorer status before retrying.', 'warning');
     }
     void refreshBalance({ notifyError: true, force: true });
@@ -828,6 +834,18 @@ async function approvePreparedTransfer(button) {
           : executionProgress.submitted
             ? 'confirmation'
             : executionProgress.awaiting ? 'approval' : 'preparing');
+    if (!rejected) {
+      if (failureStage === 'submitted') {
+        reportClientEvent('transaction_submission_failure', 'submission');
+      } else if (failureStage === 'confirmation') {
+        reportClientEvent('transaction_confirmation_failure', 'confirmation');
+      } else {
+        reportClientEvent(
+          'client_api_failure',
+          failureStage === 'approval' ? 'signing' : failureStage === 'preparing' ? 'simulation' : failureStage,
+        );
+      }
+    }
     executionProgress.status = rejected ? 'rejected' : 'failed';
     executionProgress.failureStage = failureStage;
     executionProgress.message = error.message;
@@ -910,6 +928,7 @@ async function handleAddressSubmit(form) {
       setFeedback(form, 'Some required Devnet reads failed. This result is unverified, not low risk.', 'warning');
     }
   } catch (error) {
+    reportClientEvent('rpc_failure', 'inspection');
     const message = error?.name === 'WalletInspectionError'
       ? error.message
       : 'The Devnet wallet inspection could not be completed.';

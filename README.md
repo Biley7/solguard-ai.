@@ -27,7 +27,11 @@ npm run dev            # Start the Vite frontend and Express API together
 npm run dev:frontend   # Start only the frontend
 npm run dev:backend    # Start only the API with automatic reload
 npm run build          # Build the frontend with Vite
+npm run build:staging  # Build with .env.staging
+npm run build:production # Build with .env.production
 npm start              # Start the Express API
+npm run start:staging  # Start the API with .env.staging
+npm run start:production # Start the API with .env.production
 npm test               # Run unit, API, and integration tests
 npm run test:unit      # Run unit tests only
 npm run test:integration # Run integration tests only
@@ -39,13 +43,24 @@ npm run validate       # Run lint and all node:test tests
 npm run measure:performance  # Lighthouse-adjacent runtime, network, and API metrics
 npm run check:accessibility  # axe WCAG scan plus keyboard, labels, and target checks
 npm run check:responsive     # Six widths, both themes, reduced motion, screenshots
+npm run check:deployment     # Validate hosting headers and Devnet-only policy
+npm run check:secrets        # Scan the production build for credential patterns
+npm run smoke:deployment     # Health, CORS, telemetry, metrics, and SPA smoke checks
 ```
 
 Browser E2E requires Chromium once per machine: `npx playwright install chromium`. E2E never uses a real wallet or real funds; it starts its own loopback frontend/backend and replaces Phantom and the Devnet RPC with deterministic doubles. The live Devnet command is read-only and skipped by the normal test run unless `RUN_DEVNET_TESTS=1` is set.
 
 The performance and accessibility scripts run against a production build, not the Vite dev server. Run `npm run build`, serve it with `npx vite preview --host 127.0.0.1 --port 4173`, and start the API with `npm start` in another terminal before using them. Results and screenshots are written to the gitignored `perf-artifacts/` directory; each script accepts `--url`, `--out`, and (for the performance script) `--api` overrides.
 
-The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; a server-host deployment must set `HOST=0.0.0.0` (serverless deployments require a platform-specific adapter instead). Set `TRUST_PROXY_HOPS` to the exact trusted reverse-proxy hop count for deployment; do not enable blanket proxy trust.
+The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; hosted deployments must set `HOST=0.0.0.0`, bind the platform `PORT`, and set `TRUST_PROXY_HOPS=1` for the Vercel/Render edge. Do not enable blanket proxy trust.
+
+Environment templates are split by environment:
+
+- `.env.example` and `config/environments/local.env.example` — local;
+- `config/environments/staging.env.example` — staging;
+- `config/environments/production.env.example` — production.
+
+The API validates `APP_ENV`, HTTPS origins, proxy hops, feature flags, and Devnet-only settings at startup. Vite validates `VITE_SOLANA_NETWORK`, `VITE_ENABLE_MAINNET`, and HTTPS API/RPC URLs at build time. Never put `GEMINI_API_KEY` or `METRICS_TOKEN` in a `VITE_*` variable.
 
 ## Project layout
 
@@ -74,7 +89,20 @@ Never paste a seed phrase or private key. Do not retry a transaction marked pend
 
 ## Deployment
 
-Deploy the Vite frontend as a static site and the Express backend as a Node.js service. Configure the backend environment variables from `.env.example` in the hosting provider's secret/environment settings; set `HOST=0.0.0.0`, `PORT` as provided by the platform, and `TRUST_PROXY_HOPS` to the verified proxy topology. Configure the frontend `/api` route or reverse proxy to the backend origin and enforce HTTPS. Do not expose `GEMINI_API_KEY` through any `VITE_` variable. The single-process in-memory rate limiter is not shared across instances; use a platform/shared limiter before horizontally scaling. Vercel deployments require a serverless adapter or separate backend service; the local Express start command is not itself a Vercel function configuration.
+The prepared topology is **Vercel static frontend + Render Node web service**, with HTTPS custom domains, exact CORS origins, HSTS/CSP security headers, Render health checks, structured JSON logs, protected metrics, and GitHub Actions deployment gates. `render.yaml` and `vercel.json` are checked in. The backend remains a single persistent instance because its rate limiter and metrics are process-local; do not scale it horizontally without a shared store.
+
+The full setup, DNS, secrets, monitoring, and verification steps are in [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md). Environment contracts and the Mainnet gate are in [docs/PRODUCTION_ENVIRONMENT.md](docs/PRODUCTION_ENVIRONMENT.md). Incident recovery is in [docs/ROLLBACK_PLAN.md](docs/ROLLBACK_PLAN.md).
+
+Production is **blocked** by the open High findings H-04 and H-05 in [docs/SECURITY_AUDIT_FINAL.md](docs/SECURITY_AUDIT_FINAL.md). The production workflow requires manual approval and is not run automatically. Staging and production remain Devnet-only; `ENABLE_MAINNET=true` is rejected by the API and `VITE_ENABLE_MAINNET=true` is rejected by the frontend build. There is no environment flag that enables Mainnet.
+
+Deployment smoke checks require running services:
+
+```sh
+npm run build
+npx vite preview --host 127.0.0.1 --port 4173
+# separate terminal: npm start
+npm run smoke:deployment -- --api http://127.0.0.1:3000 --frontend http://127.0.0.1:4173
+```
 
 ## Known limitations
 
@@ -97,4 +125,7 @@ Deploy the Vite frontend as a static site and the Express backend as a Node.js s
 - [Phase 9 test results](docs/TEST_RESULTS.md)
 - [Phase 10 performance audit](docs/PERFORMANCE_AUDIT.md)
 - [Phase 10 accessibility audit](docs/ACCESSIBILITY_AUDIT.md)
+- [Phase 11 deployment guide](docs/DEPLOYMENT_GUIDE.md)
+- [Phase 11 production environment](docs/PRODUCTION_ENVIRONMENT.md)
+- [Phase 11 rollback plan](docs/ROLLBACK_PLAN.md)
 - [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)

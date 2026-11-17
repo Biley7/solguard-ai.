@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { test } from 'node:test';
 import { createApp } from '../../backend/src/app.js';
+import { loadRuntimeConfig } from '../../backend/src/config/runtime.js';
+import { createLogger } from '../../backend/src/observability/logger.js';
+import { MetricsRegistry } from '../../backend/src/observability/metrics.js';
 
 async function withServer(run, options) {
   const server = createApp(options).listen(0, '127.0.0.1');
@@ -22,7 +25,11 @@ test('health endpoint reports API process liveness only', async () => {
   await withServer(async (origin) => {
     const response = await fetch(`${origin}/api/health`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { status: 'ok' });
+    const body = await response.json();
+    assert.equal(body.status, 'ok');
+    assert.equal(body.network, 'devnet');
+    assert.equal(body.mainnetEnabled, false);
+    assert.equal(body.environment, 'local');
     assert.ok(response.headers.get('x-request-id'));
     assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(response.headers.get('x-frame-options'), 'DENY');

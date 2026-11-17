@@ -12,7 +12,11 @@
     "dev:frontend": "vite --host 127.0.0.1",
     "dev:backend": "node --env-file-if-exists=.env --watch backend/src/server.js",
     "build": "vite build",
+    "build:staging": "vite build --mode staging",
+    "build:production": "vite build --mode production",
     "start": "node --env-file-if-exists=.env backend/src/server.js",
+    "start:staging": "node --env-file-if-exists=.env.staging backend/src/server.js",
+    "start:production": "node --env-file-if-exists=.env.production backend/src/server.js",
     "test": "node --test",
     "test:unit": "node --test \"tests/unit/*.test.js\"",
     "test:integration": "node --test \"tests/integration/*.test.js\"",
@@ -23,6 +27,9 @@
     "measure:performance": "node scripts/measure-performance.mjs",
     "check:accessibility": "node scripts/check-accessibility.mjs",
     "check:responsive": "node scripts/check-responsive.mjs",
+    "smoke:deployment": "node scripts/smoke-deployment.mjs",
+    "check:secrets": "node scripts/check-build-secrets.mjs",
+    "check:deployment": "node scripts/check-deployment-config.mjs",
     "validate": "npm run lint && npm test"
   },
   "dependencies": {

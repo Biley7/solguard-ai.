@@ -1,4 +1,5 @@
 import { rateLimit } from 'express-rate-limit';
+import { metrics } from '../observability/metrics.js';
 
 export const AI_RATE_LIMIT_WINDOW_MS = 60_000;
 export const AI_RATE_LIMIT_MAX = 10;
@@ -9,6 +10,7 @@ export const aiInterpretRateLimit = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   handler: (_request, response, _next, options) => {
+    metrics.recordRateLimited();
     response.status(options.statusCode).json({
       error: {
         code: 'RATE_LIMITED',

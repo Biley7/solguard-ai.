@@ -9,6 +9,7 @@ node_modules/
 # Build output and coverage
 dist/
 coverage/
+.vercel/
 
 # Playwright and performance output
 playwright-report/
