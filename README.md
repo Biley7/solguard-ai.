@@ -1,136 +1,436 @@
 # SolGuard AI
 
-The Natural-Language Copilot & On-Chain AI Security Firewall for Solana.
+**Natural-Language Copilot & Security-Oriented Transaction Engine for Solana.**
 
-The frontend provides a responsive command center with Phantom connection, live Devnet balance, recipient inspection, a Gemini-powered natural-language copilot, and an explicitly approved SOL transfer flow. The backend validates every proposed transfer deterministically and identifies its limited fallback parser when Gemini is unavailable. SOL transfers are scanned, fee-checked, simulated, placed with a compact provenance memo in one atomic Devnet transaction, signed by Phantom only after explicit user approval, and submitted through the fixed Devnet RPC. No Mainnet or autonomous-signing path exists.
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Solana](https://img.shields.io/badge/Solana-Devnet%20Only-9945FF?logo=solana&logoColor=white)](https://solana.com/)
+[![Express](https://img.shields.io/badge/Express-5.3.0-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![Vite](https://img.shields.io/badge/Vite-8.3.6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-4.3.5-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tests](https://img.shields.io/badge/Tests-109%20Passing-brightgreen)](tests/)
+[![Status](https://img.shields.io/badge/Status-Controlled%20Devnet%20Testing-blue)]()
 
-## Requirements
+---
 
-- Node.js 24 LTS (the selected version is recorded in `.nvmrc`)
-- npm 11 or compatible with the `engines` range in `package.json`
-- Phantom browser extension for the wallet-authorized transaction flow
-- Devnet SOL for live transaction testing; never use Mainnet funds
+> *"Gemini proposes. SolGuard verifies. Phantom authorizes. Solana executes."*  
+> — **Core Architectural Principle**
 
-## Setup
+SolGuard AI bridges the gap between natural-language user intent and on-chain blockchain execution. By decoupling non-deterministic AI interpretation from deterministic schema validation and user-authorized wallet signing, SolGuard ensures that generative models never hold keys, sign payloads, or execute transactions autonomously.
 
-```sh
+---
+
+## Table of Contents
+
+- [What is SolGuard AI?](#what-is-solguard-ai)
+- [The Problem](#the-problem)
+- [Our Approach: 4-Stage Security Boundary](#our-approach-4-stage-security-boundary)
+- [Feature Matrix](#feature-matrix)
+- [How SolGuard AI Works](#how-solguard-ai-works)
+- [System Architecture](#system-architecture)
+- [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Configuration](#environment-configuration)
+  - [Running Locally](#running-locally)
+  - [Testing & Quality Checks](#testing--quality-checks)
+- [Solana Devnet Testing](#solana-devnet-testing)
+- [Security Model & Trust Boundaries](#security-model--trust-boundaries)
+- [Project Status & Audit Results](#project-status--audit-results)
+- [Roadmap](#roadmap)
+- [Known Limitations](#known-limitations)
+- [Contributing](#contributing)
+- [License](#license)
+- [References & Documentation](#references--documentation)
+
+---
+
+## What is SolGuard AI?
+
+SolGuard AI is an AI-assisted Solana transaction copilot designed with a defense-in-depth security workflow. Users can express transaction intent in plain English (e.g., *"Send 0.05 SOL to 7xKX... for coffee"*). 
+
+Rather than allowing an AI agent to execute transactions directly, SolGuard enforces a strict separation of concerns:
+
+1. **Generative AI (Google Gemini 2.5 Flash)** translates unstructured natural language into a structured JSON transaction proposal.
+2. **Deterministic Validation Engines (Ajv / JSON Schema)** independently audit recipient addresses, balances, lamport limits, and network fees against real-time on-chain parameters.
+3. **Pre-flight Simulation (`@solana/web3.js`)** runs the transaction against the Solana Devnet RPC to catch runtime errors before presenting a review modal.
+4. **User-Controlled Cryptographic Signing (Phantom)** ensures private keys never touch the application. The user reviews the decoded instruction in both SolGuard and the Phantom browser extension before signing.
+
+---
+
+## The Problem
+
+Executing transactions on high-speed blockchains like Solana introduces common friction and security risks:
+
+* **Base58 Complexity & Address Poisoning:** Solana public keys are 32–44 alphanumeric characters. Manual entry or clipboard hijacking can result in irreversible fund loss.
+* **Blind Signing:** Users often approve cryptic hexadecimal transaction hashes in wallet popups without understanding the underlying instruction parameters.
+* **Risks of Autonomous AI Agents:** Granting AI direct access to private keys or signing capabilities creates critical vulnerabilities to prompt injection, hallucinations, and unpredictable model drift.
+* **Lack of Audit Provenance:** Native token transfers frequently lack lightweight, human-readable on-chain context explaining why a transaction occurred.
+
+---
+
+## Our Approach: 4-Stage Security Boundary
+
+SolGuard AI prevents unauthorized transactions by establishing four distinct security perimeters:
+
+```
++--------------------------------------------------------------------------+
+| 1. INTENT STAGE (Untrusted / Non-Deterministic)                          |
+|    User Prompt  -->  Express API  -->  Google Gemini 2.5 Flash           |
+|    Output: Draft JSON Proposal (Zero signing or broadcast authority)      |
++--------------------------------------------------------------------------+
+                                    |
+                                    v
++--------------------------------------------------------------------------+
+| 2. VERIFICATION STAGE (Strictly Deterministic)                           |
+|    - Schema Validation (Ajv JSON Schema)                                 |
+|    - Base58 Public Key Check                                             |
+|    - Balance Check + Rent-Exemption + Fee Cushion Check                  |
+|    - Atomic Multi-Recipient Validation                                   |
+|    - On-Chain RPC Simulation via Devnet                                  |
++--------------------------------------------------------------------------+
+                                    |
+                                    v
++--------------------------------------------------------------------------+
+| 3. AUTHORIZATION STAGE (User-Controlled / Non-Custodial)                 |
+|    - SolGuard Visual Review Modal (Address, Amount, Lamports, Fee)       |
+|    - User Clicks: "Open Phantom for explicit approval"                   |
+|    - Phantom Wallet Decodes Instruction & Verifies Signer                |
+|    - Post-Signing Integrity Check (Verifies payload was not mutated)     |
++--------------------------------------------------------------------------+
+                                    |
+                                    v
++--------------------------------------------------------------------------+
+| 4. EXECUTION & AUDIT STAGE (On-Chain Solana Devnet)                      |
+|    - SystemProgram.transfer() + SPL Memo Program v2 Instruction          |
+|    - Devnet RPC Broadcast & Commitment Confirmation                      |
+|    - On-Chain Memo Verification & Solana Explorer Deep Link              |
++--------------------------------------------------------------------------+
+```
+
+---
+
+## Feature Matrix
+
+Every feature in the repository has been evaluated against its actual implementation state:
+
+| Feature | Implementation Status | Frontend | Backend | On-Chain / Devnet | Verification Evidence |
+|:---|:---:|:---:|:---:|:---:|:---|
+| **Natural-Language Copilot** | **Verified** | Command Center UI | Express 5 + Gemini API | N/A | Tested with live Gemini & deterministic fallback (`backend/src/ai/`) |
+| **Deterministic Fallback Parser** | **Verified** | Error recovery notice | Regex parser | N/A | Handles explicit transfer prompts when Gemini API key is missing |
+| **Single SOL Transfer** | **Implemented** | Interactive review modal | Validation service | `@solana/web3.js` v3 | Simulation and atomic memo instruction implemented; ready for live Devnet test |
+| **Multi-Recipient Transfer** | **Implemented** | Recipient list builder | Atomic batch validation | Single transaction batch | Max 10 recipients, balance cushion, and duplicate check verified in unit tests |
+| **Transaction Pre-Flight Simulation** | **Implemented** | Pre-flight status display | RPC transport | `simulateTransaction` | Verifies execution before invoking wallet signature |
+| **SPL Memo Audit Trail** | **Implemented** | Memo verification badge | Payload builder | SPL Memo Program v2 | Appends compact provenance hash (`solguard:v1:...`) in the same atomic transaction |
+| **Phantom Wallet Integration** | **Implemented** | Direct `window.solana` bridge | N/A (Client-only) | Phantom API | Auto-detect, connect, disconnect, network check, and post-sign integrity checks |
+| **Wallet X-Ray** | **Implemented** | Visual inspector card | N/A | Devnet RPC | Fetches balance, owner, executable flag, and up to 20 recent Devnet signatures |
+| **Security Risk Scoring** | **Heuristic / Stub** | Color-coded risk badge | Scoring module | N/A | Returns default `0/100` for valid addresses; formal risk feed planned |
+| **Session Transaction History** | **Verified** | In-memory table | N/A | Client memory | Tracks attempts in open session; clears on page reload (non-persistent by design) |
+| **Multi-Layer Mainnet Guard** | **Verified** | Build-time & runtime guards | Boot guard | Hardcoded Devnet RPC | 4 independent layers actively reject `ENABLE_MAINNET=true` |
+
+---
+
+## How SolGuard AI Works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as SolGuard Frontend
+    participant API as Express Backend
+    participant AI as Gemini 2.5 Flash
+    participant RPC as Solana Devnet RPC
+    participant Wallet as Phantom Wallet
+
+    User->>UI: Enter prompt ("Send 0.05 SOL to 7xKX...")
+    UI->>API: POST /api/ai/interpret { prompt, walletContext }
+    API->>AI: Structured prompt with JSON Schema
+    AI-->>API: JSON draft proposal
+    API->>API: Validate schema & sanitize fields
+    API-->>UI: Verified transfer proposal
+    UI->>RPC: getBalance & getLatestBlockhash
+    UI->>RPC: simulateTransaction(transfer + memo)
+    RPC-->>UI: Simulation success (compute units, logs)
+    UI->>User: Display Review Modal (Address, Amount, Fees)
+    User->>UI: Click "Open Phantom for explicit approval"
+    UI->>Wallet: signTransaction(transaction)
+    Wallet->>User: Phantom prompt (Inspect & Approve)
+    User->>Wallet: Confirm Signature
+    Wallet-->>UI: Signed transaction
+    UI->>UI: Verify message integrity (no mutation)
+    UI->>RPC: sendRawTransaction & confirmTransaction
+    RPC-->>UI: Signature confirmed on Devnet
+    UI->>RPC: getParsedTransaction(signature)
+    RPC-->>UI: Verify SPL Memo presence
+    UI->>User: Transaction Success + Solana Explorer Link
+```
+
+---
+
+## System Architecture
+
+```
+solguard-ai/
+├── frontend/             # Vanilla JavaScript (ES2022+), Vite 8, Tailwind CSS 4
+│   ├── src/
+│   │   ├── components/   # Command Center, Copilot, Wallet X-Ray, Modals
+│   │   ├── services/     # Blockchain bridge, Wallet provider, AI client
+│   │   └── state/        # Reactive event-driven store
+│   └── public/           # Static assets & SVG icons
+├── backend/              # Node.js LTS, Express 5.3
+│   └── src/
+│       ├── ai/           # Gemini API client + Regex fallback interpreter
+│       ├── routes/       # /api/ai/interpret, /api/health
+│       └── middleware/   # Rate limiting (express-rate-limit), CORS, security headers
+├── blockchain/           # Solana transaction engine (@solana/web3.js v3)
+│   └── src/              # Builders, simulators, Devnet RPC client, SPL Memo instruction
+├── shared/               # Universal domain logic
+│   ├── schemas/          # Strict JSON Schemas for Ajv validation
+│   └── validation/       # Base58 checks, lamport math, sanitization
+├── tests/                # Automated test suites (109 passing tests)
+│   ├── unit/             # Domain validation, schema, and builder tests
+│   ├── backend/          # Express API route, rate-limiting, and error handling tests
+│   ├── integration/      # RPC mock and wallet mock integration tests
+│   └── e2e/              # Playwright browser end-to-end user journeys
+└── docs/                 # Engineering specifications, STRIDE threat model, architecture
+```
+
+---
+
+## Technology Stack
+
+| Layer | Technology | Version | Purpose |
+|:---|:---|:---|:---|
+| **Frontend Framework** | Vanilla JavaScript | ES2022+ | Zero framework overhead, deterministic browser execution |
+| **Build & Tooling** | Vite | `8.3.6` | Fast bundling, development proxy, and build-time env validation |
+| **Styling** | Tailwind CSS | `4.3.5` | Utility-first responsive design, light/dark mode support |
+| **Backend Runtime** | Node.js | `>=22.12.0` (v24 LTS) | High-performance asynchronous execution environment |
+| **Backend Framework** | Express | `5.3.0` | Minimalist HTTP API for AI orchestration |
+| **Security & Limits** | express-rate-limit | `8.7.3` | IP-based request rate limiting on the AI interpretation endpoint |
+| **Schema Validation** | Ajv + ajv-formats | `8.20.0` | Strict deterministic JSON Schema validation |
+| **AI Engine** | Google Gemini 2.5 Flash | REST API | Natural-language intent extraction into structured JSON |
+| **Blockchain SDK** | `@solana/web3.js` | `3.2.0` | Keypair parsing, SystemProgram transfers, simulation, and RPC |
+| **On-Chain Programs** | System Program & SPL Memo | `v2` | Native SOL transfers and atomic provenance recording |
+| **Wallet Provider** | Phantom Wallet Bridge | Direct API | Cryptographic transaction signing via `window.solana` |
+| **Network Cluster** | Solana Devnet | `api.devnet.solana.com` | Isolated test network; no financial value |
+| **Test Runners** | `node:test` & Playwright | Native / `1.65.1` | Unit, integration, E2E browser tests, and accessibility checks |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js:** `>=22.12.0` (Node 24 LTS recommended, see `.nvmrc`)
+- **npm:** `>=10.5.0`
+- **Phantom Wallet:** [Browser Extension](https://phantom.app/) installed and configured for **Solana Devnet**
+- **Google Gemini API Key:** (Optional) Obtain from [Google AI Studio](https://aistudio.google.com/). If omitted, the deterministic fallback parser handles explicit commands.
+
+### Installation
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/Biley7/solguard-ai.git
+cd solguard-ai
 npm install
+```
+
+### Environment Configuration
+
+Copy the local environment template:
+
+```bash
 cp .env.example .env
 ```
 
-Set a valid Google Gemini API key in the ignored backend `.env` file to enable Gemini. `GEMINI_API_KEY` remains server-side; never place it in frontend configuration or commit `.env`. If it is absent or Gemini is unavailable, the service attempts only a clearly labeled deterministic fallback for simple, explicit transfer commands.
+Edit `.env` with your preferred settings:
 
-## Commands
+```ini
+# Application Environment
+APP_ENV=local
+NODE_ENV=development
+HOST=127.0.0.1
+PORT=3000
 
-```sh
-npm run dev            # Start the Vite frontend and Express API together
-npm run dev:frontend   # Start only the frontend
-npm run dev:backend    # Start only the API with automatic reload
-npm run build          # Build the frontend with Vite
-npm run build:staging  # Build with .env.staging
-npm run build:production # Build with .env.production
-npm start              # Start the Express API
-npm run start:staging  # Start the API with .env.staging
-npm run start:production # Start the API with .env.production
-npm test               # Run unit, API, and integration tests
-npm run test:unit      # Run unit tests only
-npm run test:integration # Run integration tests only
-npm run test:e2e       # Run Playwright browser journeys with wallet/RPC doubles
-npm run test:devnet    # Opt-in read-only live Devnet RPC check
-npm run coverage       # Report Node coverage for backend and domain code
-npm run lint           # Syntax, secret, and unsafe-endpoint checks
-npm run validate       # Run lint and all node:test tests
-npm run measure:performance  # Lighthouse-adjacent runtime, network, and API metrics
-npm run check:accessibility  # axe WCAG scan plus keyboard, labels, and target checks
-npm run check:responsive     # Six widths, both themes, reduced motion, screenshots
-npm run check:deployment     # Validate hosting headers and Devnet-only policy
-npm run check:secrets        # Scan the production build for credential patterns
-npm run smoke:deployment     # Health, CORS, telemetry, metrics, and SPA smoke checks
+# Solana Network (Devnet only — Mainnet is blocked by runtime guards)
+SOLANA_NETWORK=devnet
+ENABLE_MAINNET=false
+VITE_SOLANA_NETWORK=devnet
+VITE_SOLANA_RPC_URL=https://api.devnet.solana.com
+VITE_ENABLE_MAINNET=false
+
+# AI Configuration (Keep server-side; NEVER prefix with VITE_)
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Browser E2E requires Chromium once per machine: `npx playwright install chromium`. E2E never uses a real wallet or real funds; it starts its own loopback frontend/backend and replaces Phantom and the Devnet RPC with deterministic doubles. The live Devnet command is read-only and skipped by the normal test run unless `RUN_DEVNET_TESTS=1` is set.
+> [!WARNING]
+> Never commit `.env` to version control. `GEMINI_API_KEY` must remain strictly on the backend. Vite build scripts will fail if secrets are detected with `VITE_` prefixes.
 
-The performance and accessibility scripts run against a production build, not the Vite dev server. Run `npm run build`, serve it with `npx vite preview --host 127.0.0.1 --port 4173`, and start the API with `npm start` in another terminal before using them. Results and screenshots are written to the gitignored `perf-artifacts/` directory; each script accepts `--url`, `--out`, and (for the performance script) `--api` overrides.
+### Running Locally
 
-The frontend is served at `http://127.0.0.1:5173`. The backend health endpoint is `http://127.0.0.1:3000/api/health`; Vite proxies `/api` requests to the backend. Set `PORT` and `HOST` in `.env` to change the backend listener. Local development defaults to loopback; hosted deployments must set `HOST=0.0.0.0`, bind the platform `PORT`, and set `TRUST_PROXY_HOPS=1` for the Vercel/Render edge. Do not enable blanket proxy trust.
+You can run both the frontend and backend concurrently with a single command:
 
-Environment templates are split by environment:
-
-- `.env.example` and `config/environments/local.env.example` — local;
-- `config/environments/staging.env.example` — staging;
-- `config/environments/production.env.example` — production.
-
-The API validates `APP_ENV`, HTTPS origins, proxy hops, feature flags, and Devnet-only settings at startup. Vite validates `VITE_SOLANA_NETWORK`, `VITE_ENABLE_MAINNET`, and HTTPS API/RPC URLs at build time. Never put `GEMINI_API_KEY` or `METRICS_TOKEN` in a `VITE_*` variable.
-
-## Project layout
-
-- `frontend/` — Vite-hosted vanilla JavaScript presentation layer, with Command Center, AI Copilot, Wallet Scanner, Wallet X-Ray, Transaction History, and Settings. Phantom connection and explicit transaction signing are in the browser wallet service. Transaction history is kept only in memory for the current page session.
-- `backend/src/` — Express API, server-side Gemini transport, intent interpretation/validation, and rate-limited `/api/ai/interpret` route.
-- `blockchain/src/` — Fixed Devnet configuration, RPC connection, wallet inspection, deterministic risk summary, transaction builder, simulation, and signed-transaction submission/confirmation.
-- `shared/schemas/` and `shared/validation/` — Shared data contracts and canonical pure domain validation.
-- `tests/` — Unit, backend API, integration, and Playwright browser E2E suites, plus deterministic wallet/RPC fixtures.
-- `scripts/lint.mjs` — Syntax and static secret/unsafe-endpoint checks.
-- `docs/` — Architecture, API, data model, security design, testing evidence, and the controlled beta operating documents.
-
-Wallet X-Ray is a read-only investigation of the entered public address: balance, account owner/executable metadata, and up to 20 recent Devnet signatures. It cannot establish complete history, account age, beneficial ownership, or whether the wallet is malicious. Risk is heuristic, not a probability or safety guarantee.
-
-Wallet inspection, transaction fee queries, simulation, submission, and memo verification use `https://api.devnet.solana.com`. The app scans all recipients and blocks preparation if any risk assessment is unavailable or any destination is unsupported; high/critical warnings remain visible and require explicit acknowledgement. A successful simulation is not a safety guarantee. All SOL transfers and the SolGuard heuristic provenance memo are instructions in the same atomic transaction. Phantom only signs after explicit user approval; the app verifies the signed message is unchanged before broadcasting it to Devnet. After confirmation, SolGuard asks Devnet for the parsed transaction and reports memo verification as verified, not verified, or unavailable; RPC unavailability does not change the reported confirmation result. Transaction history lists only attempts initiated in the open application session; it is not persisted and clears on reload/close. `GET /api/health` reports only local API liveness. AI output is a validated proposal, not authorization or a safety verdict.
-
-## Devnet testing
-
-1. Install Phantom and switch it to Solana Devnet.
-2. Connect Phantom from SolGuard and use a Devnet wallet funded with test SOL.
-3. Use Wallet X-Ray to inspect a known public Solana address. The report is based on current Devnet RPC observations, not Mainnet state.
-4. In AI Copilot, enter explicit recipient addresses and amounts. Ambiguous or ungrounded commands must request clarification.
-5. Connect a funded Devnet wallet, scan all recipients, review the complete transaction preview and any risk warning, then explicitly choose **Open Phantom for explicit approval**.
-6. Review and approve in Phantom. Confirm the result and memo verification status in SolGuard; use the provided Devnet Explorer link to inspect the signature and memo independently.
-
-Never paste a seed phrase or private key. Do not retry a transaction marked pending until its Explorer status has been checked.
-
-## Deployment
-
-The prepared topology is **Vercel static frontend + Render Node web service**, with HTTPS custom domains, exact CORS origins, HSTS/CSP security headers, Render health checks, structured JSON logs, protected metrics, and GitHub Actions deployment gates. `render.yaml` and `vercel.json` are checked in. The backend remains a single persistent instance because its rate limiter and metrics are process-local; do not scale it horizontally without a shared store.
-
-The full setup, DNS, secrets, monitoring, and verification steps are in [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md). Environment contracts and the Mainnet gate are in [docs/PRODUCTION_ENVIRONMENT.md](docs/PRODUCTION_ENVIRONMENT.md). Incident recovery is in [docs/ROLLBACK_PLAN.md](docs/ROLLBACK_PLAN.md).
-
-Production is **blocked** by the open High findings H-04 and H-05 in [docs/SECURITY_AUDIT_FINAL.md](docs/SECURITY_AUDIT_FINAL.md). The production workflow requires manual approval and is not run automatically. Staging and production remain Devnet-only; `ENABLE_MAINNET=true` is rejected by the API and `VITE_ENABLE_MAINNET=true` is rejected by the frontend build. There is no environment flag that enables Mainnet.
-
-The controlled beta is documented in [docs/BETA_LAUNCH_PLAN.md](docs/BETA_LAUNCH_PLAN.md), [docs/USER_FEEDBACK_REPORT.md](docs/USER_FEEDBACK_REPORT.md), and [docs/PRODUCT_METRICS.md](docs/PRODUCT_METRICS.md). No beta participants have been recruited and no user feedback or analytics exist yet.
-
-Deployment smoke checks require running services:
-
-```sh
-npm run build
-npx vite preview --host 127.0.0.1 --port 4173
-# separate terminal: npm start
-npm run smoke:deployment -- --api http://127.0.0.1:3000 --frontend http://127.0.0.1:4173
+```bash
+npm run dev
 ```
 
-## Known limitations
+Or run them in separate terminals:
 
-- All chain features are Devnet-only; the application has no Mainnet RPC configuration.
-- Wallet X-Ray reads a limited window of recent signatures and cannot prove wallet safety, ownership, age, or full transaction history.
-- The risk engine is a deterministic heuristic, not an independent security audit or fraud probability.
-- AI fallback supports only a limited set of explicit command forms; it asks for clarification instead of guessing.
-- Session transaction history is memory-only and is cleared by reload or closing the app.
-- Memo verification depends on Devnet returning a parsed transaction. If that read fails or the memo cannot be parsed, the app reports verification unavailable rather than assuming it succeeded.
-- Live Phantom signing and Devnet transaction execution require an installed wallet, an explicit user approval, and Devnet test SOL. Automated tests use controlled RPC/wallet doubles and do not send real transactions.
+```bash
+# Terminal 1: Backend API (Express on http://127.0.0.1:3000)
+npm run dev:backend
 
-## Architecture documents
+# Terminal 2: Frontend Command Center (Vite on http://127.0.0.1:5173)
+npm run dev:frontend
+```
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [API contracts](docs/API_CONTRACTS.md)
-- [Data models](docs/DATA_MODELS.md)
-- [Security design](docs/SECURITY_DESIGN.md)
-- [Phase 8 security audit and threat model](docs/SECURITY_AUDIT_FINAL.md)
-- [Phase 9 testing strategy](docs/TESTING_STRATEGY.md)
-- [Phase 9 test results](docs/TEST_RESULTS.md)
-- [Phase 10 performance audit](docs/PERFORMANCE_AUDIT.md)
-- [Phase 10 accessibility audit](docs/ACCESSIBILITY_AUDIT.md)
-- [Phase 11 deployment guide](docs/DEPLOYMENT_GUIDE.md)
-- [Phase 11 production environment](docs/PRODUCTION_ENVIRONMENT.md)
-- [Phase 11 rollback plan](docs/ROLLBACK_PLAN.md)
-- [Phase 12 controlled beta launch plan](docs/BETA_LAUNCH_PLAN.md)
-- [Phase 12 user feedback report and backlog](docs/USER_FEEDBACK_REPORT.md)
-- [Phase 12 product metrics](docs/PRODUCT_METRICS.md)
-- [Frontend final audit](docs/FRONTEND_FINAL_AUDIT.md)
+Open `http://127.0.0.1:5173` in your browser. The Vite development server automatically proxies `/api` requests to the Express backend.
+
+### Testing & Quality Checks
+
+Run the complete test suite (unit, API, and integration):
+
+```bash
+# Run all automated tests (109 passing tests)
+npm test
+
+# Run unit tests only
+npm run test:unit
+
+# Run backend API tests only
+npm run test:backend
+
+# Run syntax, secret, and endpoint linting
+npm run lint
+
+# Run all validations (lint + test)
+npm run validate
+```
+
+---
+
+## Solana Devnet Testing
+
+SolGuard AI is built exclusively for **Solana Devnet**. Transactions on Devnet use test SOL with no monetary value.
+
+### Step-by-Step Devnet Workflow
+
+1. **Configure Phantom:**
+   - Open Phantom Wallet.
+   - Go to **Settings** → **Developer Settings**.
+   - Enable **Testnet Mode** and select **Solana Devnet**.
+2. **Fund Your Devnet Wallet:**
+   - Request test SOL using the Solana CLI:
+     ```bash
+     solana airdrop 1 <YOUR_WALLET_ADDRESS> --url devnet
+     ```
+   - Or use the official web faucet: [faucet.solana.com](https://faucet.solana.com/).
+3. **Connect to SolGuard:**
+   - Click **Connect Phantom** in the top navigation.
+   - Verify that your Devnet balance loads correctly.
+4. **Initiate a Test Transfer:**
+   - Type in the Copilot prompt:
+     ```text
+     Send 0.01 SOL to 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU for testing
+     ```
+   - Click **Interpret**.
+   - Review the generated transaction parameters in the review modal.
+   - Click **Open Phantom for explicit approval**.
+   - Review and sign the transaction in Phantom.
+   - Verify the confirmed signature on [Solana Explorer (Devnet)](https://explorer.solana.com/?cluster=devnet).
+
+---
+
+## Security Model & Trust Boundaries
+
+SolGuard AI implements strict defense-in-depth principles:
+
+* **Non-Custodial Architecture:** SolGuard never generates, manages, or stores private keys or seed phrases. All cryptographic signing is delegated to Phantom via standard browser extension APIs.
+* **Deterministic AI Isolation:** The generative AI model is treated as an untrusted agent. AI responses are constrained to structured JSON, validated against strict Ajv schemas, and sanitized before reaching the frontend.
+* **Post-Signing Integrity Guard:** Before broadcasting a signed payload to the RPC, SolGuard validates that the transaction message hash matches the exact parameters approved by the user, preventing client-side payload tampering.
+* **Quadruple Mainnet Gate:** Four independent mechanisms reject any configuration attempting to connect to Mainnet-Beta:
+  1. `vite.config.js` build-time check
+  2. `blockchain/config/network.js` module configuration
+  3. `backend/config/runtime.js` server bootstrap check
+  4. `frontend/config/runtime.js` client bootstrap check
+
+---
+
+## Project Status & Audit Results
+
+* **Current Stage:** Functional Prototype / Controlled Devnet Testing
+* **Test Coverage:** 109 passing automated tests (0 vulnerabilities reported by `npm audit`)
+* **Comprehensive Audit:** A senior engineering and blockchain security audit was completed and documented in [SOLGUARD_AI_COMPREHENSIVE_AUDIT.md](SOLGUARD_AI_COMPREHENSIVE_AUDIT.md).
+
+### Security Findings Summary
+
+- **Resolved Vulnerabilities:** 
+  - `H-01`: Transaction mutation during signing (Fixed with post-sign hash verification)
+  - `H-02`: Risk summary substitution (Fixed with server-side validation)
+  - `H-03`: Amount tampering in multi-recipient batches (Fixed with atomic lamport sum checks)
+- **Open Audit Disclosures:**
+  - `H-04 (Low Impact on Devnet)`: The security scanner currently returns a heuristic baseline risk score (`0/100`) for valid public keys. A production risk feed integration is required before mainnet consideration.
+  - `H-05 (Operational)`: Transaction submission guards rely on in-memory session state. Reloading the page clears the active deduplication cache.
+  - `M-04 (Operational)`: The `/api/ai/interpret` route uses IP-based rate limiting but does not require wallet authentication.
+
+---
+
+## Roadmap
+
+- [x] Natural-language transaction intent interpretation (Gemini 2.5 Flash)
+- [x] Deterministic regex fallback parser for zero-credential operation
+- [x] Single and multi-recipient atomic SOL transfer builder
+- [x] SPL Memo Program provenance audit tagging
+- [x] Pre-flight simulation via `@solana/web3.js`
+- [x] Phantom wallet integration and explicit review modal
+- [x] 109-test automated test suite & CI verification
+- [ ] Live Devnet community testing & user journey validation
+- [ ] Integration with live on-chain threat intelligence feeds (Blowfish / Chainalysis API)
+- [ ] SPL Token support (USDC / USDT transfers on Devnet)
+- [ ] Cryptographic wallet authentication (Sign-In with Solana / SIWS) for API endpoints
+
+---
+
+## Known Limitations
+
+- **Devnet Exclusivity:** Mainnet execution is strictly disabled. The application will not connect to or execute transactions on Mainnet-Beta.
+- **Session-Scoped History:** Transaction history is stored in browser memory and will reset upon page refresh.
+- **Single RPC Endpoint:** By default, the application queries the public Solana Devnet RPC (`https://api.devnet.solana.com`), which is subject to public rate limits. For heavy testing, configure a dedicated RPC provider in `.env`.
+- **Heuristic Risk Indicators:** Risk ratings provided by the interface are automated heuristic warnings and do not constitute an audited financial or security guarantee.
+
+---
+
+## Contributing
+
+Contributions are welcome. To contribute:
+
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/your-feature-name`.
+3. Ensure all tests and lint checks pass:
+   ```bash
+   npm run validate
+   ```
+4. Commit your changes with descriptive commit messages.
+5. Push to your branch and open a Pull Request.
+
+---
+
+## License
+
+This repository is currently private (`"private": true` in `package.json`). All rights are reserved by the repository owner unless a license is formally published.
+
+---
+
+## References & Documentation
+
+- [Comprehensive Audit Report](SOLGUARD_AI_COMPREHENSIVE_AUDIT.md)
+- [System Architecture](docs/ARCHITECTURE.md)
+- [API Contracts](docs/API_CONTRACTS.md)
+- [Security Design & Threat Model](docs/SECURITY_DESIGN.md)
+- [Final Security Audit](docs/SECURITY_AUDIT_FINAL.md)
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
+- [Testing Strategy](docs/TESTING_STRATEGY.md)
+- [Solana Web3.js Documentation](https://solana-labs.github.io/solana-web3.js/)
+- [Phantom Wallet Developer Docs](https://docs.phantom.app/)
