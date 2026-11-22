@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  ComputeBudgetProgram,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -23,6 +24,7 @@ async function createPreparedTransaction({ recipientCount = 1 } = {}) {
     blockhash: '11111111111111111111111111111111',
     lastValidBlockHeight: 123,
   });
+  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0n }));
   for (const recipient of recipients) {
     transaction.add(SystemProgram.transfer({
       fromPubkey: payer.publicKey,
@@ -83,6 +85,12 @@ function fakeConnection({ confirmation, sendError } = {}) {
       return { value: { err: null } };
     },
     async sendRawTransaction(raw, options) {
+      if (raw instanceof Promise || typeof raw?.then === 'function') {
+        throw new TypeError('sendRawTransaction expected raw bytes, received a Promise');
+      }
+      if (!(raw instanceof Uint8Array)) {
+        throw new TypeError('sendRawTransaction expected Uint8Array or Buffer');
+      }
       calls.push(['send', raw, options]);
       if (sendError) throw sendError;
       return 'devnet-signature';
@@ -326,4 +334,49 @@ test('reports pending submission on confirmation timeout and safe submission fai
     }),
     (error) => error.code === 'SUBMISSION_FAILED',
   );
+});
+
+test('accepts cross-bundle signed transaction that fails instanceof Transaction', async () => {
+  const { payer, prepared } = await createPreparedTransaction();
+  const connection = fakeConnection();
+
+  const result = await executePreparedTransfer(prepared, {
+    signTransaction: async (tx) => {
+      const realSigned = await signedCopy(tx, payer);
+      const crossBundleTx = Object.assign(Object.create(null), {
+        signature: realSigned.signature,
+        signatures: realSigned.signatures,
+        serializeMessage: () => realSigned.serializeMessage(),
+        serialize: (config) => realSigned.serialize(config),
+      });
+      assert.equal(crossBundleTx instanceof Transaction, false);
+      return crossBundleTx;
+    },
+    connection,
+  });
+
+  assert.equal(result.status, 'confirmed');
+  assert.equal(result.signature, 'devnet-signature');
+});
+
+test('properly awaits async serialize and supplies raw Uint8Array bytes to sendRawTransaction', async () => {
+  const { payer, prepared } = await createPreparedTransaction();
+  let sentBytes;
+  const connection = fakeConnection();
+  const originalSend = connection.sendRawTransaction;
+  connection.sendRawTransaction = async (raw, options) => {
+    assert.ok(!(raw instanceof Promise));
+    assert.ok(raw instanceof Uint8Array);
+    sentBytes = raw;
+    return originalSend(raw, options);
+  };
+
+  const result = await executePreparedTransfer(prepared, {
+    signTransaction: async (tx) => signedCopy(tx, payer),
+    connection,
+  });
+
+  assert.equal(result.status, 'confirmed');
+  assert.ok(sentBytes instanceof Uint8Array);
+  assert.ok(sentBytes.length > 0);
 });

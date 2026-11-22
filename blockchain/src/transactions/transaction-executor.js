@@ -1,4 +1,5 @@
 import {
+  ComputeBudgetProgram,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -149,6 +150,9 @@ function buildReviewedTransaction(prepared) {
     feePayer: payer,
     recentBlockhash: prepared.blockhash,
   });
+  reviewedTransaction.add(ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 0n,
+  }));
   for (const recipient of recipients) {
     reviewedTransaction.add(SystemProgram.transfer({
       fromPubkey: payer,
@@ -162,7 +166,7 @@ function buildReviewedTransaction(prepared) {
     data: new TextEncoder().encode(preview.memoText),
   }));
 
-  if (!(prepared.transaction instanceof Transaction)) {
+  if (!prepared?.transaction || typeof prepared.transaction.serializeMessage !== 'function') {
     throw new TransactionExecutionError(
       'INVALID_EXECUTION_REQUEST',
       'The prepared transaction is not a Solana transaction.',
@@ -190,7 +194,16 @@ function buildReviewedTransaction(prepared) {
 }
 
 function signatureFromSignedTransaction(signedTransaction) {
-  if (!(signedTransaction instanceof Transaction) || !signedTransaction.signature) {
+  const hasSignature = Boolean(
+    signedTransaction?.signature
+    || (Array.isArray(signedTransaction?.signatures) && signedTransaction.signatures[0]?.signature)
+  );
+  if (
+    !signedTransaction
+    || typeof signedTransaction.serialize !== 'function'
+    || typeof signedTransaction.serializeMessage !== 'function'
+    || !hasSignature
+  ) {
     throw new TransactionExecutionError(
       'INVALID_WALLET_RESPONSE',
       'Phantom did not return a signed Solana transaction.',
@@ -356,7 +369,11 @@ export async function executePreparedTransfer(prepared, {
 
   let rawTransaction;
   try {
-    rawTransaction = signedTransaction.serialize({ requireAllSignatures: true, verifySignatures: true });
+    const serialized = signedTransaction.serialize({ requireAllSignatures: true, verifySignatures: true });
+    rawTransaction = serialized instanceof Promise ? await serialized : serialized;
+    if (!(rawTransaction instanceof Uint8Array) || rawTransaction.length === 0) {
+      throw new Error('Serialized transaction is not a valid byte array.');
+    }
   } catch (error) {
     reportProgress(onProgress, 'failed', { stage: 'approval' });
     throw new TransactionExecutionError(

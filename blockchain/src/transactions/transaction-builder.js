@@ -1,4 +1,5 @@
 import {
+  ComputeBudgetProgram,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -221,6 +222,10 @@ export async function prepareSolTransferTransaction({
     blockhash: latestBlockhash.blockhash,
     lastValidBlockHeight,
   });
+
+  transaction.add(ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 0n,
+  }));
 
   for (const recipient of recipients) {
     transaction.add(SystemProgram.transfer({

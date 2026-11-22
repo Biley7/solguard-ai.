@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import { isCanonicalSolanaAddress } from '../../utils/solana-address.js';
 
 const REJECTED_CODES = new Set([4001, 4100]);
@@ -167,6 +168,33 @@ export function createPhantomWallet({ providerLookup = getPhantomProvider } = {}
       );
     }
 
+    let originalSerialize;
+    let wireBuffer;
+    if (typeof transaction?.serialize === 'function') {
+      try {
+        const preSerialized = transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+        const wireBytes = preSerialized instanceof Promise ? await preSerialized : preSerialized;
+        if (wireBytes) {
+          wireBuffer = Buffer.isBuffer(wireBytes) ? wireBytes : Buffer.from(wireBytes);
+          originalSerialize = transaction.serialize;
+          transaction.serialize = function (config) {
+            if (config?.requireAllSignatures === false) {
+              return wireBuffer;
+            }
+            if (!config || Object.keys(config).length === 0) {
+              return wireBuffer;
+            }
+            return originalSerialize.call(this, config);
+          };
+        }
+      } catch {
+        // If pre-serialization fails, fall through to default signing
+      }
+    }
+
     try {
       const currentAddress = normalizePublicKey(wallet.publicKey);
       if (currentAddress !== expectedPayerAddress) {
@@ -182,7 +210,12 @@ export function createPhantomWallet({ providerLookup = getPhantomProvider } = {}
         throw new PhantomWalletError('USER_REJECTED', 'The Phantom signing request was rejected.', error);
       }
       throw new PhantomWalletError('SIGNING_FAILED', 'Phantom could not sign the transaction.', error);
+    } finally {
+      if (transaction && originalSerialize) {
+        transaction.serialize = originalSerialize;
+      }
     }
+
   }
 
   function subscribe(listener) {

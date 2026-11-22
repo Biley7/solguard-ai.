@@ -110,7 +110,7 @@ for (const recipientCount of [2, 3, 5]) {
 
     assert.equal(prepared.preview.recipients.length, recipientCount);
     assert.equal(prepared.preview.totalLamports, String(recipientCount * 1_000_000));
-    assert.equal(prepared.transaction.instructions.length, recipientCount + 1);
+    assert.equal(prepared.transaction.instructions.length, recipientCount + 2);
     assert.equal(
       prepared.transaction.instructions.filter(
         ({ programId }) => programId.equals(SystemProgram.programId),
@@ -140,7 +140,7 @@ for (const recipientCount of [2, 3, 5]) {
     assert.equal(connection.calls.filter(([name]) => name === 'confirmTransaction').length, 1);
     assert.equal(connection.simulations.length, 2);
     for (const transaction of connection.simulations) {
-      assert.equal(transaction.instructions.length, recipientCount + 1);
+      assert.equal(transaction.instructions.length, recipientCount + 2);
     }
 
     const transferAddresses = approvedInstructions

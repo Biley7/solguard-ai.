@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  ComputeBudgetProgram,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -84,13 +85,18 @@ test('builds one unsigned atomic transaction containing all transfers and the co
   });
 
   assert.ok(prepared.transaction instanceof Transaction);
-  assert.equal(prepared.transaction.instructions.length, 3);
+  assert.equal(prepared.transaction.instructions.length, 4);
   assert.deepEqual(
-    prepared.transaction.instructions.slice(0, 2).map((instruction) => instruction.programId.toBase58()),
-    [SystemProgram.programId.toBase58(), SystemProgram.programId.toBase58()],
+    prepared.transaction.instructions.map((instruction) => instruction.programId.toBase58()),
+    [
+      ComputeBudgetProgram.programId.toBase58(),
+      SystemProgram.programId.toBase58(),
+      SystemProgram.programId.toBase58(),
+      MEMO_PROGRAM_ADDRESS,
+    ],
   );
-  assert.equal(prepared.transaction.instructions[2].programId.toBase58(), MEMO_PROGRAM_ADDRESS);
-  assert.equal(new TextDecoder().decode(prepared.transaction.instructions[2].data), prepared.preview.memoText);
+  assert.equal(prepared.transaction.instructions[3].programId.toBase58(), MEMO_PROGRAM_ADDRESS);
+  assert.equal(new TextDecoder().decode(prepared.transaction.instructions[3].data), prepared.preview.memoText);
   assert.match(prepared.preview.memoText, /^SOLGUARD_V1 \| OBSERVED_RISK: LOW 0\/100 \| HEURISTIC$/);
   assert.equal(prepared.preview.totalLamports, '300000003');
   assert.equal(prepared.preview.feeLamports, '5000');
@@ -173,7 +179,8 @@ test('supports a one-recipient transfer and rejects malformed network, quantitie
     recipientReports: reportsFor(transferIntent().recipients),
     connection: fakeConnection(),
   });
-  assert.equal(prepared.transaction.instructions.length, 2);
+  assert.equal(prepared.transaction.instructions.length, 3);
+  assert.equal(prepared.transaction.instructions[0].programId.toBase58(), ComputeBudgetProgram.programId.toBase58());
 
   for (const intent of [
     { ...transferIntent(), network: 'mainnet-beta' },

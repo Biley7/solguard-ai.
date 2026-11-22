@@ -147,3 +147,38 @@ test('reports Phantom signing rejection and missing signing capability', async (
     code: 'SIGNING_UNAVAILABLE',
   });
 });
+
+test('provides a synchronous Buffer serialize shim during Phantom signing and restores original serialize', async () => {
+  let observedBuffer;
+  let wasSynchronous = false;
+  let wasBuffer = false;
+  const provider = createProvider({
+    signTransaction: async (tx) => {
+      const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      wasSynchronous = !(serialized instanceof Promise);
+      wasBuffer = Buffer.isBuffer(serialized);
+      observedBuffer = serialized;
+      return tx;
+    },
+  });
+  const wallet = createPhantomWallet({ providerLookup: () => provider });
+  await wallet.connect();
+
+  let originalCalled = false;
+  const mockTx = {
+    async serialize(config) {
+      originalCalled = true;
+      return new Uint8Array([1, 2, 3, 4]);
+    },
+  };
+
+  const signed = await wallet.signTransaction(mockTx, firstAddress);
+  assert.equal(signed, mockTx);
+  assert.equal(wasSynchronous, true);
+  assert.equal(wasBuffer, true);
+  assert.deepEqual(observedBuffer, Buffer.from([1, 2, 3, 4]));
+  // Original serialize must be restored
+  const afterRestore = mockTx.serialize();
+  assert.ok(afterRestore instanceof Promise);
+  assert.equal(originalCalled, true);
+});

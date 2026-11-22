@@ -42,6 +42,11 @@ export default defineConfig(({ mode }) => {
   return {
     root: 'frontend',
     plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        buffer: 'buffer',
+      },
+    },
     build: {
       outDir: '../dist',
       emptyOutDir: true,
